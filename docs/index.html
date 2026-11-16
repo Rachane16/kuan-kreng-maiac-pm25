@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102739">
+  <meta name="description" content="แผนที่ค่าประเมิน PM₂.₅ จาก NASA MAIAC สำหรับพื้นที่พรุควนเคร็ง ย้อนหลังสามเดือน">
+  <title>พรุควนเคร็ง | MAIAC PM₂.₅</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+  <link rel="stylesheet" href="./style.css?v=2">
+  <script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div><p class="brand-eyebrow">KUAN KRENG PEAT SWAMP FOREST</p><strong>พรุควนเคร็ง <span>/ PM₂.₅</span></strong></div>
+      </div>
+      <div class="header-right">
+        <span class="source-pill"><i></i> NASA MAIAC</span>
+        <a href="#method" class="header-link">วิธีอ่านข้อมูล <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow"><span class="eyebrow-line"></span> SATELLITE BASED ESTIMATION</p>
+        <h1 id="page-title">ภาพฝุ่นจากดาวเทียม<br><em>ในพื้นที่พรุควนเคร็ง</em></h1>
+        <p class="hero-description">สำรวจค่าประเมิน PM₂.₅ รายวันจาก AOD 470 nm ของ NASA MAIAC บนกริด 1 × 1 กม. พร้อมดูย้อนหลัง 3 เดือน</p>
+      </div>
+      <div class="hero-note"><span class="note-icon">ⓘ</span><p>ตัวเลขบนเว็บไซต์เป็น<strong>ค่าประเมินจากโมเดล Extra Trees</strong> ไม่ใช่ค่าตรวจวัดจากสถานี และจะไม่แสดงตัวเลขเมื่อ AOD ไม่ผ่านการตรวจคุณภาพ</p></div>
+    </section>
+
+    <section class="dashboard" aria-label="แผนที่และตัวเลือกวันที่">
+      <aside class="control-panel">
+        <div class="panel-heading"><span class="panel-step">01 / ช่วงเวลา</span><h2>เลือกวันที่ต้องการดู</h2><p>วันที่ของผลิตภัณฑ์ NASA อ้างอิง UTC</p></div>
+        <label class="input-label" for="date-input">วันที่</label>
+        <div class="date-field"><input id="date-input" type="date" aria-label="เลือกวันที่ของข้อมูล MAIAC"><span aria-hidden="true">▦</span></div>
+        <div class="date-nav"><button id="prev-day" type="button" aria-label="วันก่อนหน้า">← <span>ก่อนหน้า</span></button><button id="next-day" type="button" aria-label="วันถัดไป"><span>ถัดไป</span> →</button></div>
+        <div class="range-heading"><span>เลื่อนดูย้อนหลัง</span><strong id="range-label">—</strong></div>
+        <input id="date-range" type="range" min="0" max="0" value="0" aria-label="เลื่อนเลือกวันที่ย้อนหลัง">
+        <div class="range-ends"><span id="range-start">—</span><span id="range-end">—</span></div>
+        <button id="latest-with-data" class="secondary-button" type="button">ดูวันล่าสุดที่มีข้อมูล <span aria-hidden="true">↗</span></button>
+        <div class="selection-status" id="selection-status" role="status"><span class="status-dot"></span><span>กำลังโหลดข้อมูล…</span></div>
+        <div class="coverage-card"><p>พื้นที่กริดที่มี AOD ใช้ได้</p><div><strong id="coverage-value">—</strong><span id="coverage-percent">—</span></div><div class="progress-track"><span id="coverage-progress"></span></div><small id="coverage-detail">จากทั้งหมด 1,052 ช่อง</small></div>
+      </aside>
+
+      <div class="map-column">
+        <div class="map-topline"><div><span class="panel-step">02 / แผนที่รายวัน</span><h2 id="map-title">กำลังโหลดแผนที่…</h2></div><span class="map-meta">EPSG:4326 <span class="meta-divider">•</span> 1 × 1 กม.</span></div>
+        <div class="map-wrap"><div id="map" aria-label="แผนที่ค่าประเมิน PM2.5 พรุควนเคร็ง"></div><div class="map-overlay"><span class="overlay-label">ค่าเฉลี่ยของช่องที่มีข้อมูล</span><strong id="mean-pm25">—</strong><small>µg/m³ · PM₂.₅ ประเมิน</small></div><div class="map-message" id="map-message" hidden></div></div>
+        <div class="map-footer"><div class="legend"><span>PM₂.₅ ประเมิน</span><div class="legend-gradient" aria-hidden="true"></div><div class="legend-labels"><span>0</span><span id="legend-mid">—</span><span id="legend-max">—</span></div></div><div class="no-data-key"><i></i> ไม่มี AOD ผ่าน QA</div></div>
+      </div>
+    </section>
+
+    <section class="below-grid">
+      <div class="history-card"><div class="section-head"><div><span class="panel-step">03 / ภาพรวมย้อนหลัง</span><h2>ความพร้อมของข้อมูลรายวัน</h2></div><span id="history-count" class="section-tag">—</span></div><p>ความสูงของแท่งแสดงจำนวนช่องที่มี AOD ผ่าน QA เลือกแท่งเพื่อเปิดวันที่นั้น</p><div id="history-chart" class="history-chart" role="group" aria-label="กราฟจำนวนกริดที่มีข้อมูลย้อนหลัง"></div><div class="history-axis"><span id="chart-start">—</span><span id="chart-end">—</span></div></div>
+      <div class="detail-card"><span class="panel-step">รายละเอียดข้อมูล</span><h2>สิ่งที่แผนที่นี้บอก</h2><div class="detail-row"><span>แหล่งข้อมูล</span><strong>NASA MCD19A2 / MCD19A2N · AOD 470 nm</strong></div><div class="detail-row"><span>แบบจำลอง</span><strong>Extra Trees Regressor</strong></div><div class="detail-row"><span>เวลาของข้อมูล</span><strong id="data-time">ดูเวลาของแต่ละช่องบนแผนที่</strong></div><div class="detail-row"><span>อัปเดตชุดข้อมูล</span><strong id="generated-time">—</strong></div><a class="text-link" href="#method">อ่านวิธีประมวลผล <span aria-hidden="true">↗</span></a></div>
+    </section>
+
+    <section id="method" class="method-section"><div><p class="eyebrow"><span class="eyebrow-line"></span> ABOUT THE DATA</p><h2>จาก AOD สู่ค่าประเมิน PM₂.₅</h2></div><div class="method-steps"><article><span>01</span><h3>เลือกเฉพาะพื้นที่</h3><p>ใช้ไฟล์ NASA เฉพาะไทล์ h27v08 ที่ครอบพรุควนเคร็ง แล้วแสดงกริดที่ตัดตามขอบเขตจริง</p></article><article><span>02</span><h3>ตรวจคุณภาพ</h3><p>เก็บ AOD ที่ผ่านเกณฑ์เมฆ พื้นดิน และ QA ระดับดีที่สุดเท่านั้น พื้นที่ที่ใช้ไม่ได้คงเป็น NoData</p></article><article><span>03</span><h3>ประเมินด้วยโมเดล</h3><p>นำ AOD 470 nm เข้าโมเดล Extra Trees เดิมที่ฝึกไว้แล้ว โดยไม่ฝึกโมเดลใหม่หรือเติมข้อมูล</p></article></div></section>
+  </main>
+  <footer class="site-footer"><div><strong>พรุควนเคร็ง / PM₂.₅</strong><span>ข้อมูลประเมินจากดาวเทียม · แสดงตามวันที่มีข้อมูลจริง</span></div><div><a href="https://lpdaac.usgs.gov/products/mcd19a2v061/" target="_blank" rel="noopener noreferrer">NASA MAIAC ↗</a><a href="https://lpdaac.usgs.gov/documents/1500/MCD19_User_Guide_V61.pdf" target="_blank" rel="noopener noreferrer">คู่มือ QA ↗</a></div></footer>
+</body>
+</html>
