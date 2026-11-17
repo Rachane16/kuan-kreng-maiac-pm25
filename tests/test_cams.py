@@ -8,6 +8,7 @@ import numpy as np
 
 from cams.fetch import request_for_days
 from cams.process import daily_record, native_grid
+from cams.forecast import latest_cycle, forecast_request, hourly_records
 
 BOUNDARY=Path(__file__).resolve().parents[1]/"data/boundaries/kkpsf_boundary.geojson"
 
@@ -70,6 +71,36 @@ class CAMSTests(unittest.TestCase):
         self.hours[self.start.isoformat()]=(item[0],item[1]+timedelta(hours=12),item[2],item[3])
         with self.assertRaises(ValueError):
             daily_record(date(2026,11,16),self.hours,self.grid,RecordingModel())
+
+    def test_forecast_cycle_uses_published_availability_and_union_of_steps(self):
+        rows=[dict(variable=['total_aerosol_optical_depth_550nm'],type=['forecast'],
+                   date=['2026-11-15/2026-11-17'],time=['00:00','12:00'],
+                   leadtime_hour=[str(h) for h in range(121) if h%6==remainder])
+              for remainder in range(6)]
+        now=datetime(2026,11,17,10,tzinfo=timezone.utc)
+        self.assertEqual(latest_cycle(rows,now),now.replace(hour=0))
+        for r in rows:r['date']=['2026-11-15/2026-11-16']
+        self.assertEqual(latest_cycle(rows,now),datetime(2026,11,16,12,tzinfo=timezone.utc))
+        with self.assertRaises(ValueError):latest_cycle(rows[:1],now)
+
+    def test_forecast_request_is_bounded_and_covers_120_hours(self):
+        r=forecast_request(self.base,BOUNDARY)
+        self.assertEqual(r['area'],[8.4,99.6,7.6,100.4])
+        self.assertEqual(r['date'],['2026-11-15'])
+        self.assertEqual(r['leadtime_hour'],[str(i) for i in range(121)])
+
+    def test_hourly_prediction_preserves_valid_time_and_area_weighting(self):
+        field=np.arange(9,dtype=float).reshape(3,3)/10
+        records=hourly_records({self.start.isoformat():(self.start,self.base,5,field)},self.grid,RecordingModel())
+        record=records[0]
+        self.assertEqual(record['valid_time'],self.start.isoformat())
+        self.assertEqual(record['forecast_base_time'],self.base.isoformat())
+        self.assertEqual(record['lead_time_hours'],[5,5])
+        self.assertEqual(record['available_cells'],5)
+        weights={r.grid_id:r.overlap_m2 for r in self.grid.itertuples()}
+        expected=np.average([c[2] for c in record['cells']],weights=[weights[c[0]] for c in record['cells']])
+        self.assertEqual(record['mean_pm25'],round(expected,2))
+        self.assertTrue(all(c[3]==1 for c in record['cells']))
 
 
 if __name__=='__main__':unittest.main()

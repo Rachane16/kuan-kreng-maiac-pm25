@@ -4,7 +4,14 @@ on:
   schedule:
     # 20:23 Asia/Bangkok. The latest UTC product day is checked every evening.
     - cron: '23 13 * * *'
+    # CAMS cycles: 17:30 and 05:30 Asia/Bangkok; retry two hours later.
+    - cron: '30 10,12,22,0 * * *'
   workflow_dispatch:
+    inputs:
+      forecast_only:
+        description: 'Refresh CAMS forecast only'
+        type: boolean
+        default: false
 
 concurrency:
   group: maiac-pages
@@ -39,6 +46,7 @@ jobs:
           --input models/Extra_Trees_model.pkl.aesgcm
           --output .private/Extra_Trees_model.pkl
       - name: Refresh rolling MAIAC data
+        if: github.event.schedule == '23 13 * * *' || (github.event_name == 'workflow_dispatch' && !inputs.forecast_only)
         env:
           NASA_EARTHDATA_TOKEN: ${{ secrets.NASA_EARTHDATA_TOKEN }}
         run: >-
@@ -51,11 +59,14 @@ jobs:
         timeout-minutes: 30
         env:
           CAMS_ADS_TOKEN: ${{ secrets.CAMS_ADS_TOKEN }}
+          FORECAST_ONLY: ${{ github.event.schedule != '23 13 * * *' && (github.event_name != 'workflow_dispatch' || inputs.forecast_only) }}
         run: |
           if [ -n "$CAMS_ADS_TOKEN" ]; then
+            args=()
+            if [ "$FORECAST_ONLY" = 'true' ]; then args+=(--forecast-only); fi
             python -m cams.refresh \
               --boundary data/boundaries/kkpsf_boundary.geojson \
-              --model .private/Extra_Trees_model.pkl
+              --model .private/Extra_Trees_model.pkl "${args[@]}"
           else
             echo 'CAMS secret is not configured; retaining the published CAMS history.'
           fi

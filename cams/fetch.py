@@ -33,26 +33,30 @@ def request_for_days(start: date, end: date, boundary: Path) -> dict:
 
 
 def download(start: date, end: date, boundary: Path, output: Path, token: str) -> Path:
+    request = request_for_days(start, end, boundary)
+    return download_request(request, output / f"cams_aod550_{start}_{end}.zip", token)
+
+
+def download_request(request: dict, target: Path, token: str) -> Path:
+    """Resume one bounded request, caching only by its exact parameters."""
     if not token:
         raise ValueError("CAMS_ADS_TOKEN is required")
     from ecmwf.datastores import Client
-    request = request_for_days(start, end, boundary)
-    output.mkdir(parents=True, exist_ok=True)
-    target = output / f"cams_aod550_{start}_{end}.zip"
+    target.parent.mkdir(parents=True, exist_ok=True)
     receipt = target.with_suffix(".request.json")
-    if target.exists():
-        return target
     client = Client(url=URL, key=token, maximum_tries=3, retry_after=5,
                     timeout=60, progress=False, log_callback=lambda *a, **k: None)
     if receipt.exists():
         stored = json.loads(receipt.read_text(encoding="utf-8"))
         if stored["request"] != request:
             raise ValueError("Stored CAMS request parameters differ")
+        if target.exists():
+            return target
         remote = client.get_remote(stored["request_id"])
     else:
         remote = client.submit(COLLECTION, request)
         receipt.write_text(json.dumps({"request_id": remote.request_id, "request": request}), encoding="utf-8")
-    print(f"CAMS request {start} to {end}; area N/W/S/E {request['area']}", flush=True)
+    print(f"CAMS request {request['date']} {request['time']}; area N/W/S/E {request['area']}", flush=True)
     previous = None
     deadline = time.monotonic()+7200
     while time.monotonic() < deadline:

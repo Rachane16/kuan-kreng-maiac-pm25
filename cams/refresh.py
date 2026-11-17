@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .fetch import download
 from .process import export
+from .forecast import refresh as refresh_forecast
 
 
 def main() -> None:
@@ -19,9 +20,17 @@ def main() -> None:
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--site-data", type=Path, default=Path("docs/data"))
     parser.add_argument("--raw", type=Path, default=Path("data/raw/cams"))
+    parser.add_argument("--forecast-only", action="store_true")
     args = parser.parse_args()
     if args.days<1:
         raise ValueError("days must be positive")
+    token = os.getenv("CAMS_ADS_TOKEN", "")
+    if not token:
+        raise ValueError("CAMS_ADS_TOKEN is required")
+    # Fetch the latest forecast first, so current/future coverage is independent of history.
+    refresh_forecast(args.boundary, args.model, args.site_data, args.raw, token)
+    if args.forecast_only:
+        return
     start = args.end-timedelta(days=args.days-1)
     path = args.site_data/"cams_history.json"
     previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -29,7 +38,6 @@ def main() -> None:
     pending = [start+timedelta(days=n) for n in range(args.days)
                if old.get((start+timedelta(days=n)).isoformat(), {}).get("status") != "Available"]
     first = min(pending) if pending else args.end
-    token = os.getenv("CAMS_ADS_TOKEN", "")
     source = download(first, args.end, args.boundary, args.raw, token)
     export([source], start, args.end, args.boundary, args.model, args.site_data)
 
