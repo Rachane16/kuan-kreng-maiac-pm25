@@ -9,7 +9,10 @@
   let gridLayer;
   let layerById = new Map();
   let selectedIndex = 0;
-  let scaleMax = 50;
+  let targets = [];
+  let basemaps;
+  let activeBasemap;
+  const idwCache = new Map();
 
   const thaiDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("th-TH", {
     timeZone: "UTC", day: "numeric", month: "short", year: "numeric"
@@ -24,10 +27,7 @@
   })[c]);
 
   function color(value) {
-    const stops = [[50, 181, 169], [172, 216, 140], [244, 210, 107], [237, 147, 90], [207, 91, 100]];
-    const scaled = Math.max(0, Math.min(3.999, value / scaleMax * 4));
-    const i = Math.floor(scaled), t = scaled - i;
-    return `rgb(${stops[i].map((n, k) => Math.round(n + (stops[i + 1][k] - n) * t)).join(",")})`;
+    return value <= 15 ? "#00b8e6" : value <= 25 ? "#20c747" : value <= 37.5 ? "#ffe031" : value <= 75 ? "#ff931e" : "#f04438";
   }
 
   function statusText(day) {
@@ -37,8 +37,10 @@
     return "ยังไม่ได้ตรวจข้อมูลของวันที่เลือก";
   }
 
-  function popupContent(gridId, sample) {
+  function popupContent(gridId, sample, estimate) {
     const heading = `<div class="popup-label">กริด 1 × 1 กม.</div><div class="popup-id">${escapeHtml(gridId)}</div>`;
+    if (!sample && estimate) return heading + `<div class="popup-value">${estimate.value.toFixed(2)} <small>µg/m³</small></div>`
+      + `<div class="popup-meta"><strong>ค่าประมาณด้วย IDW</strong><br>ไม่มี AOD ผ่าน QA ณ ช่องนี้<br>จุดตั้งต้นใกล้ที่สุด: ${(estimate.distance / 1000).toFixed(2)} กม.<br>ใช้ ${estimate.neighbours} จุดใกล้ที่สุดของวันเดียวกัน</div>`;
     if (!sample) return heading + `<div class="popup-nodata">ไม่มี AOD ผ่าน QA ในวันนี้</div>`;
     return heading + `<div class="popup-value">${Number(sample[2]).toFixed(2)} <small>µg/m³</small></div>`
       + `<div class="popup-meta">PM₂.₅ ประเมินจากโมเดล<br>AOD 470 nm: ${Number(sample[1]).toFixed(3)}<br>เวลาผ่านพื้นที่: ${escapeHtml(thaiTime(sample[3]))}<br>รอบผ่านที่ใช้ได้: ${Number(sample[4])}</div>`;
@@ -47,6 +49,22 @@
   function render() {
     const day = history.days[selectedIndex];
     const samples = new Map(day.cells.map(item => [item[0], item]));
+    const idwMode = $("display-mode").value === "idw";
+    if (idwMode && !idwCache.has(day.date)) {
+      const points = targets.filter(t => samples.has(t.id)).map(t => ({...t, value:Number(samples.get(t.id)[2])}));
+      idwCache.set(day.date, KKIDW.interpolate(points, targets));
+    }
+    const result = idwMode ? idwCache.get(day.date) : null;
+    const estimates = new Map(result?.values.map(item => [item.id, item]) || []);
+    const idwAvailable = result?.status === "available";
+    const messageText = idwMode && day.available_cells > 0 && !idwAvailable
+      ? "ข้อมูลไม่เพียงพอสำหรับ IDW ต้องมีอย่างน้อย 3 จุดที่ไม่เรียงเป็นเส้นเดียวกัน" : statusText(day);
+    $("view-note").textContent = idwMode
+      ? idwAvailable ? `IDW ครอบคลุม ${targets.length.toLocaleString("th-TH")} ช่อง · ใช้ ${samples.size.toLocaleString("th-TH")} จุดตั้งต้น · คลิกช่องเพื่อดูแหล่งที่มาของค่า`
+        : `IDW ยังไม่พร้อม · ${messageText}`
+      : "ค่าประเมินจากโมเดล ณ ตำแหน่งที่มี AOD ผ่าน QA";
+    $("mean-label").textContent = idwMode ? "ค่าเฉลี่ยทั้งพื้นที่ (รวม IDW)" : "ค่าเฉลี่ยของช่องที่มีข้อมูล";
+    $("nodata-label").textContent = idwMode ? "ไม่มีค่าประมาณ IDW" : "ไม่มี AOD ผ่าน QA";
     dateInput.value = day.date;
     slider.value = selectedIndex;
     $("map-title").textContent = thaiDate(day.date);
@@ -54,12 +72,14 @@
     $("coverage-percent").textContent = percent(day.available_cells, history.grid_count);
     $("coverage-detail").textContent = `จากทั้งหมด ${history.grid_count.toLocaleString("th-TH")} ช่อง`;
     $("coverage-progress").style.width = `${100 * day.available_cells / history.grid_count}%`;
-    $("mean-pm25").textContent = day.mean_pm25 === null ? "—" : Number(day.mean_pm25).toFixed(2);
+    const areaWeight = targets.reduce((sum,t) => sum + t.weight, 0);
+    const mean = idwMode ? idwAvailable ? targets.reduce((sum,t) => sum + estimates.get(t.id).value*t.weight,0)/areaWeight : null : day.mean_pm25;
+    $("mean-pm25").textContent = mean === null ? "—" : Number(mean).toFixed(2);
     status.className = `selection-status ${day.status === "Available" ? "available" : "nodata"}`;
-    status.lastElementChild.textContent = statusText(day);
+    status.lastElementChild.textContent = idwMode ? messageText + (idwAvailable ? " · เติมพื้นที่ด้วย IDW แล้ว" : "") : statusText(day);
     const message = $("map-message");
-    message.hidden = day.status === "Available";
-    message.textContent = statusText(day);
+    message.hidden = idwMode ? idwAvailable : day.status === "Available";
+    message.textContent = messageText;
     $("prev-day").disabled = selectedIndex === 0;
     $("next-day").disabled = selectedIndex === history.days.length - 1;
     document.querySelectorAll(".history-bar").forEach((bar, i) => {
@@ -68,17 +88,21 @@
     });
     layerById.forEach((layer, gridId) => {
       const sample = samples.get(gridId);
+      const estimate = estimates.get(gridId);
+      const value = idwMode ? estimate?.value : sample ? Number(sample[2]) : undefined;
+      const hasValue = Number.isFinite(value);
       layer.setStyle({
-        color: sample ? "#5c7472" : "#a2b3b0", weight: sample ? .6 : .38,
-        opacity: sample ? .75 : .6,
-        fillColor: sample ? color(Number(sample[2])) : "#bfcbca",
-        fillOpacity: sample ? .86 : .34
+        color: hasValue ? "#536a68" : "#a2b3b0", weight: hasValue ? .55 : .38,
+        opacity: hasValue ? .7 : .6,
+        fillColor: hasValue ? color(value) : "#bfcbca",
+        fillOpacity: hasValue ? .76 : .34
       });
       layer.unbindPopup();
-      layer.bindPopup(popupContent(gridId, sample));
+      layer.bindPopup(idwMode && !idwAvailable ? `<div class="popup-nodata">${escapeHtml(messageText)}</div>` : popupContent(gridId, sample, estimate));
     });
     const url = new URL(location.href);
     url.searchParams.set("date", day.date);
+    if (idwMode) url.searchParams.set("view", "idw"); else url.searchParams.delete("view");
     window.history.replaceState(null, "", url);
   }
 
@@ -115,10 +139,8 @@
       const [grid, dataset] = await Promise.all([gridResponse.json(), historyResponse.json()]);
       if (!window.L || !dataset.days?.length || !grid.features?.length) throw new Error("ข้อมูลแผนที่ไม่สมบูรณ์");
       history = dataset;
-      const pmValues = dataset.days.flatMap(day => day.cells.map(cell => Number(cell[2]))).filter(Number.isFinite);
-      scaleMax = Math.max(20, Math.ceil(pmValues.reduce((max, value) => Math.max(max, value), 0) / 10) * 10);
-      $("legend-mid").textContent = Math.round(scaleMax / 2);
-      $("legend-max").textContent = scaleMax;
+      targets = grid.features.map(f => ({id:f.properties.grid_id, x:f.properties.sample_x, y:f.properties.sample_y, weight:f.properties.coverage_fraction}));
+      if (targets.some(t => ![t.x,t.y,t.weight].every(Number.isFinite))) throw new Error("พิกัดกริดสำหรับ IDW ไม่สมบูรณ์");
       $("range-label").textContent = `${dataset.days.length} วัน`;
       $("range-start").textContent = thaiDate(dataset.start_date);
       $("range-end").textContent = thaiDate(dataset.end_date);
@@ -126,12 +148,18 @@
       dateInput.min = dataset.start_date;
       dateInput.max = dataset.end_date;
       slider.max = dataset.days.length - 1;
-      map = L.map("map", {zoomControl: false, preferCanvas: true, scrollWheelZoom: false});
+      map = L.map("map", {zoomControl: false, preferCanvas: true, scrollWheelZoom: true});
       L.control.zoom({position: "bottomright"}).addTo(map);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      basemaps = {osm:L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 18, opacity: .75
-      }).addTo(map);
+        maxZoom: 18, opacity: .85
+      }), imagery:L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution:"Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",maxZoom:18
+      }), topo:L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+        attribution:"Tiles &copy; Esri — Sources: Esri, USGS, NOAA, and the GIS User Community",maxZoom:18
+      })};
+      activeBasemap = basemaps.osm.addTo(map);
+      $("basemap").addEventListener("change", () => { map.removeLayer(activeBasemap); activeBasemap=basemaps[$("basemap").value].addTo(map); });
       gridLayer = L.geoJSON(grid, {
         style: {color: "#a2b3b0", weight: .38, fillColor: "#bfcbca", fillOpacity: .34},
         onEachFeature(feature, layer) { layerById.set(feature.properties.grid_id, layer); }
@@ -139,6 +167,7 @@
       map.fitBounds(gridLayer.getBounds(), {padding: [22, 22]});
       buildChart();
       const queryDate = new URLSearchParams(location.search).get("date");
+      if (new URLSearchParams(location.search).get("view") === "idw") $("display-mode").value="idw";
       const queryIndex = dataset.days.findIndex(day => day.date === queryDate);
       selectIndex(queryIndex >= 0 ? queryIndex : dataset.days.length - 1);
       dateInput.addEventListener("change", () => {
@@ -146,6 +175,7 @@
         if (index >= 0) selectIndex(index);
       });
       slider.addEventListener("input", () => selectIndex(slider.value));
+      $("display-mode").addEventListener("change", render);
       $("prev-day").addEventListener("click", () => selectIndex(selectedIndex - 1));
       $("next-day").addEventListener("click", () => selectIndex(selectedIndex + 1));
       const latestIndex = dataset.days.findLastIndex(day => day.status === "Available");
@@ -161,4 +191,5 @@
   }
 
   init();
+  document.querySelectorAll('a[href="#method"]').forEach(link => link.addEventListener("click", () => { $("method").open = true; }));
 })();

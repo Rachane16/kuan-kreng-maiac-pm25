@@ -22,9 +22,12 @@ def export_site(start: date, end: date, boundary_path: Path, grid_path: Path,
         raise ValueError("Invalid grid")
     clipped = gpd.GeoDataFrame(grid[["grid_id", "coverage_fraction"]].copy(),
                                geometry=grid.geometry.intersection(boundary), crs=grid.crs).to_crs("EPSG:4326")
+    points = grid.geometry.intersection(boundary).representative_point()
     features = [{"type": "Feature", "properties": {
-        "grid_id": row.grid_id, "coverage_fraction": round(float(row.coverage_fraction), 4)},
-        "geometry": mapping(row.geometry)} for row in clipped.itertuples()]
+        "grid_id": row.grid_id, "coverage_fraction": round(float(row.coverage_fraction), 4),
+        "sample_x": round(float(points.iloc[i].x), 3),
+        "sample_y": round(float(points.iloc[i].y), 3)},
+        "geometry": mapping(row.geometry)} for i, row in enumerate(clipped.itertuples())]
     site_data_dir.mkdir(parents=True, exist_ok=True)
     grid_file = site_data_dir / "grid.geojson"
     grid_file.write_text(json.dumps({"type": "FeatureCollection", "features": features},
