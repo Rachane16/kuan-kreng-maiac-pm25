@@ -1,7 +1,7 @@
 /* Render a 100 m display mesh in Web Mercator, evaluating IDW in UTM metres.
    Clip against the existing boundary-clipped polygons, including holes/islands. */
 window.KKSurface = {
-  async render(grid, bounds, sampler, project, cancelled) {
+  async render(grid, bounds, sampler, project, cancelled, paint) {
     const mercator=L.CRS.EPSG3857;
     const sw=mercator.project(bounds.getSouthWest()),ne=mercator.project(bounds.getNorthEast());
     const centreLat=bounds.getCenter().lat*Math.PI/180;
@@ -34,8 +34,8 @@ window.KKSurface = {
         const mx=sw.x+(col+.5)/width*(ne.x-sw.x);
         const latlng=mercator.unproject(L.point(mx,my));
         const [x,y]=project.forward([latlng.lng,latlng.lat]);
-        const value=sampler(x,y).value;
-        const rgb=value<=15?[149,220,255]:value<=25?[190,234,143]:value<=37.5?[255,229,147]:value<=75?[255,194,149]:[218,139,133];
+        const rgb=paint(sampler(x,y).value);
+        if(!rgb){data[offset+3]=0;continue;}
         data[offset]=rgb[0];data[offset+1]=rgb[1];data[offset+2]=rgb[2];
         data[offset+3]=255;
       }

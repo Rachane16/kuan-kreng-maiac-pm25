@@ -88,7 +88,7 @@ def refresh(boundary: Path, model_path: Path, site_data: Path, raw: Path, token:
     target = site_data/"cams_forecast.json"
     if target.exists():
         previous = json.loads(target.read_text(encoding="utf-8"))
-        if previous.get("forecast_base_time") == base.isoformat() and len(previous.get("hours", [])) == 121:
+        if previous.get("forecast_base_time", "") >= base.isoformat() and len(previous.get("hours", [])) == 121:
             print("CAMS latest available forecast cycle is already published", flush=True)
             return target
     request = forecast_request(base, boundary)

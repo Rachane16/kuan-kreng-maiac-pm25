@@ -28,7 +28,14 @@ def main() -> None:
     if not token:
         raise ValueError("CAMS_ADS_TOKEN is required")
     # Fetch the latest forecast first, so current/future coverage is independent of history.
-    refresh_forecast(args.boundary, args.model, args.site_data, args.raw, token)
+    forecast_error = None
+    try:
+        refresh_forecast(args.boundary, args.model, args.site_data, args.raw, token)
+    except Exception as exc:
+        if args.forecast_only:
+            raise
+        forecast_error = exc
+        print("CAMS forecast refresh failed; retaining it and trying the daily history", flush=True)
     if args.forecast_only:
         return
     start = args.end-timedelta(days=args.days-1)
@@ -40,6 +47,8 @@ def main() -> None:
     first = min(pending) if pending else args.end
     source = download(first, args.end, args.boundary, args.raw, token)
     export([source], start, args.end, args.boundary, args.model, args.site_data)
+    if forecast_error is not None:
+        raise RuntimeError("Daily history updated, but the forecast refresh failed") from forecast_error
 
 
 if __name__ == "__main__":

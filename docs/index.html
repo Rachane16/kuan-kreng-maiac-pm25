@@ -4,18 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102739">
-  <meta name="description" content="แผนที่ค่าประเมิน PM₂.₅ จาก NASA MAIAC สำหรับพื้นที่พรุควนเคร็ง ย้อนหลังสามเดือน">
+  <meta name="description" content="แผนที่ประมาณฝุ่น PM₂.₅ PM₁ และ PM₀.₁ พรุควนเคร็งจาก MAIAC และ CAMS พร้อมข้อมูลย้อนหลังและพยากรณ์รายชั่วโมง">
   <title>พรุควนเคร็ง | MAIAC PM₂.₅</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
-  <link rel="stylesheet" href="./style.css?v=5">
+  <link rel="stylesheet" href="./style.css?v=6">
   <script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/proj4@2.23.0/dist/proj4.js" integrity="sha384-KGba/0m6kKhwuERvWz69nrarKaRxkcEwit9R9pqp5+lKuLqW7TQDkWhbqEMCvo9/" crossorigin="anonymous"></script>
   <script defer src="./idw.js?v=2"></script>
-  <script defer src="./surface.js?v=2"></script>
-  <script defer src="./app.js?v=7"></script>
+  <script defer src="./surface.js?v=3"></script>
+  <script defer src="./data-utils.js?v=1"></script>
+  <script defer src="./app.js?v=8"></script>
 </head>
 <body>
   <header class="site-header">
@@ -56,32 +57,36 @@
       <div class="map-column">
         <div class="map-topline"><div><span class="panel-step">02 / แผนที่รายวัน</span><h2 id="map-title">กำลังโหลดแผนที่…</h2></div><span class="map-meta" id="map-resolution">EPSG:4326 · กริดรายงาน 1 × 1 กม.</span></div>
         <div class="map-toolbar">
-          <label>แหล่งข้อมูล<select id="data-source"><option value="maiac">MAIAC</option><option value="cams">CAMS</option></select></label>
+          <label>แหล่งข้อมูล<select id="data-source"><option value="auto">อัตโนมัติ · MAIAC ก่อน</option><option value="maiac">MAIAC</option><option value="cams">CAMS</option></select></label>
+          <fieldset class="pollutant-picker"><legend>ขนาดฝุ่น</legend><label><input type="radio" name="pollutant" value="pm25" checked><span>PM₂.₅</span></label><label><input type="radio" name="pollutant" value="pm1"><span>PM₁</span></label><label><input type="radio" name="pollutant" value="pm01"><span>PM₀.₁</span></label></fieldset>
           <label>แสดงผล<select id="display-mode"><option value="idw" selected>การประมาณค่าฝุ่น PM₂.₅</option><option value="source">PM₂.₅ ณ ตำแหน่งที่มีข้อมูล</option></select></label>
           <label>แผนที่ฐาน<select id="basemap"><option value="osm">OpenStreetMap</option><option value="imagery">World Imagery</option><option value="topo">World Topo Map</option></select></label>
         </div>
+        <div id="cams-controls" class="cams-controls" hidden><label>ช่วงข้อมูล CAMS<select id="cams-time-mode"><option value="hourly">พยากรณ์รายชั่วโมง</option><option value="daily">ค่าเฉลี่ยรายวัน</option></select></label><label id="forecast-time-label">เวลาพยากรณ์ (ไทย)<select id="forecast-time"></select></label><button id="nearest-now" class="secondary-button" type="button">ใกล้เวลาปัจจุบัน</button></div>
         <p id="view-note" class="view-note" role="status">ค่าประเมินจากโมเดล ณ ตำแหน่งที่มี AOD ผ่าน QA</p>
-        <div class="map-wrap"><div id="map" aria-label="แผนที่ค่าประเมิน PM2.5 พรุควนเคร็ง"></div><div class="map-overlay"><span id="mean-label" class="overlay-label">ค่าเฉลี่ยของช่องที่มีข้อมูล</span><strong id="mean-pm25">—</strong><small>µg/m³ · PM₂.₅ ประเมิน</small></div><div class="map-message" id="map-message" hidden></div></div>
+        <div class="map-wrap"><div id="map" aria-label="แผนที่ค่าประเมินฝุ่นพรุควนเคร็ง"></div><div class="map-overlay"><span id="mean-label" class="overlay-label">ค่าเฉลี่ยของช่องที่มีข้อมูล</span><strong id="mean-pm25">—</strong><small id="mean-unit">µg/m³ · PM₂.₅ ประเมิน</small></div><div class="map-message" id="map-message" hidden></div></div>
         <div class="map-footer">
-          <div class="legend-title">ความเข้มข้น PM₂.₅ <span>(µg/m³ · สีอ้างอิงกรมควบคุมมลพิษ)</span></div>
-          <div class="legend-levels">
+          <div class="legend-title" id="legend-title">ความเข้มข้น PM₂.₅ <span>(µg/m³ · สีอ้างอิงกรมควบคุมมลพิษ)</span></div>
+          <div class="legend-levels" id="legend-levels">
             <span><i style="background:#95dcff"></i><b>ดีมาก</b> 0–15</span><span><i style="background:#beea8f"></i><b>ดี</b> &gt;15–25</span><span><i style="background:#ffe593"></i><b>ปานกลาง</b> &gt;25–37.5</span><span><i style="background:#ffc295"></i><b>เริ่มมีผลต่อสุขภาพ</b> &gt;37.5–75</span><span><i style="background:#da8b85"></i><b>มีผลต่อสุขภาพ</b> &gt;75</span>
           </div><div class="no-data-key"><i></i><span id="nodata-label">ไม่มี AOD ผ่าน QA</span></div>
-          <div class="boundary-key"><i aria-hidden="true"></i> ขอบเขตพรุควนเคร็ง</div><small class="legend-note">ใช้สีเพื่อเทียบช่วงค่าประเมินจากดาวเทียม ไม่ใช่การรายงาน AQI จากสถานี</small>
+          <div class="boundary-key"><i aria-hidden="true"></i> ขอบเขตพรุควนเคร็ง</div><small class="legend-note" id="legend-note">ใช้สีเพื่อเทียบช่วงค่าประเมินจากดาวเทียม ไม่ใช่การรายงาน AQI จากสถานี</small>
         </div>
       </div>
     </section>
 
     <section class="below-grid">
-      <div class="history-card"><div class="section-head"><div><span class="panel-step">03 / ภาพรวมย้อนหลัง</span><h2>ข้อมูลรายวันย้อนหลัง</h2></div><span id="history-count" class="section-tag">—</span></div><p id="chart-description">ความสูงของแท่งแสดงจำนวนช่องที่มี AOD ผ่าน QA เลือกแท่งเพื่อเปิดวันที่นั้น</p><div id="history-chart" class="history-chart" role="group" aria-label="กราฟจำนวนกริดที่มีข้อมูลย้อนหลัง"></div><div class="history-axis"><span id="chart-start">—</span><span id="chart-end">—</span></div></div>
+      <div class="history-card"><div class="section-head"><div><span class="panel-step">03 / ภาพรวมย้อนหลัง</span><h2>ข้อมูลรายวันย้อนหลัง</h2></div><span id="history-count" class="section-tag">—</span></div><p id="chart-description">ค่าเฉลี่ยฝุ่นทั้งพื้นที่รายวัน (µg/m³) เลือกแท่งเพื่อเปิดวันที่นั้น</p><div id="history-chart" class="history-chart" role="group" aria-label="กราฟค่าเฉลี่ยฝุ่นทั้งพื้นที่รายวันย้อนหลัง"></div><p class="history-readout" id="chart-readout" aria-live="polite"></p><div class="history-axis"><span id="chart-start">—</span><span id="chart-end">—</span></div></div>
       <div class="detail-card"><h2>รายละเอียดข้อมูล</h2><div class="detail-row"><span>แหล่งข้อมูล</span><strong id="source-description">NASA MCD19A2 / MCD19A2N · AOD 470 nm</strong></div><div class="detail-row"><span>แบบจำลอง</span><strong>Extra Trees Regressor</strong></div><div class="detail-row"><span>ความละเอียดต้นทาง</span><strong id="resolution-description">MAIAC ประมาณ 1 กม.</strong></div><div class="detail-row" id="cams-time-row" hidden><span>ช่วงข้อมูล (เวลาไทย)</span><strong id="cams-period">—</strong></div><div class="detail-row"><span>อัปเดตชุดข้อมูล</span><strong id="generated-time">—</strong></div><a class="text-link" id="open-method" href="#method">อ่านวิธีประมวลผล <span aria-hidden="true">↗</span></a></div>
     </section>
 
     <details id="method" class="method-section"><summary><span><span class="eyebrow">ABOUT THE DATA</span><strong>จาก AOD สู่ค่าประเมิน PM₂.₅</strong></span><span class="method-toggle">ดูข้อมูลเพิ่มเติม <span aria-hidden="true">＋</span></span></summary><div class="method-steps" id="maiac-method-steps">
       <article><span>01</span><h3>ตรวจคุณภาพ</h3><p>เก็บ AOD ที่ผ่านเกณฑ์เมฆ พื้นดิน และ QA ระดับดีที่สุดเท่านั้น ในมุมมองตำแหน่งที่มีข้อมูล ช่องที่ไม่ผ่านเกณฑ์จะคงเป็น NoData</p></article>
       <article><span>02</span><h3>ประเมินด้วยโมเดล</h3><p>ตัวเลขบนเว็บไซต์เป็นค่าประเมินจากโมเดล Extra Trees ไม่ใช่ค่าตรวจวัดจากสถานี มุมมองข้อมูลตั้งต้นจะแสดงตัวเลขเฉพาะช่องที่มี AOD ผ่านการตรวจคุณภาพ</p></article>
-      <article><span>03</span><h3>ประมาณ PM₂.₅ ทั้งพื้นที่ด้วย IDW</h3><p>ใช้ค่า PM₂.₅ ของวันเดียวกันเป็นจุดตั้งต้น แล้วสร้างผืนสีต่อเนื่องเฉพาะขอบเขตป่าพรุควนเคร็ง บนตาข่ายแสดงผลประมาณ 100 เมตร ต้องมีอย่างน้อย 3 จุดที่ไม่เรียงเป็นเส้นเดียวกัน ใช้ระยะทางหน่วยเมตร กำลัง 2 และเพื่อนบ้านใกล้ที่สุดไม่เกิน 12 จุด ที่พิกัดจุดตั้งต้นจะคงค่าเดิมจากโมเดล</p><p>คลิกผืนสีเพื่อดูค่า IDW ณ ตำแหน่งที่เลือกและระยะถึงจุดตั้งต้นที่ใกล้ที่สุด ความละเอียดต้นทางยังคงประมาณ 1 กม. พื้นที่ไกลหรืออยู่นอกกลุ่มจุดตั้งต้นมีความไม่แน่นอนมากขึ้น การเติมเต็มแผนที่ไม่ได้เพิ่มข้อมูลดาวเทียมจริงหรือยืนยันความแม่นยำทั้งพื้นที่</p></article>
-    </div><p id="cams-method-note" class="cams-method-note" hidden>CAMS เป็นข้อมูลแบบจำลอง AOD 550 nm ความละเอียด 0.4° ใช้ค่าเฉลี่ย AOD ครบ 24 ชั่วโมงของวันไทย จากรอบพยากรณ์ 12:00 UTC ของวันก่อนหน้า lead time 5–28 ชั่วโมง แล้วประเมินด้วยโมเดล Extra Trees เดิมที่ใช้ชื่อฟีเจอร์ AOD 0.47 ผล CAMS ยังไม่ได้ตรวจสอบความแม่นยำกับสถานี ไม่มีการใช้ IDW ขยายเป็นข้อมูล 1 กม.</p></details>
+      <article><span>03</span><h3>ประมาณ PM₂.₅ ทั้งพื้นที่ด้วย IDW</h3><p>ใช้ค่า PM₂.₅ ของวันเดียวกันเป็นจุดตั้งต้น แล้วสร้างผืนสีต่อเนื่องเฉพาะขอบเขตป่าพรุควนเคร็ง บนตาข่ายแสดงผลประมาณ 100 เมตร ต้องมีอย่างน้อย 3 จุดที่ไม่เรียงเป็นเส้นเดียวกัน ใช้ระยะทางหน่วยเมตร กำลัง 2 และเพื่อนบ้านใกล้ที่สุดไม่เกิน 12 จุด ที่พิกัดจุดตั้งต้นจะคงค่าเดิมจากโมเดล</p><p>คลิกผืนสีเพื่อดูค่า IDW ณ ตำแหน่งที่เลือก ความละเอียดต้นทางยังคงประมาณ 1 กม. พื้นที่ไกลหรืออยู่นอกกลุ่มจุดตั้งต้นมีความไม่แน่นอนมากขึ้น การเติมเต็มแผนที่ไม่ได้เพิ่มข้อมูลดาวเทียมจริงหรือยืนยันความแม่นยำทั้งพื้นที่</p></article>
+    <article><span>04</span><h3>คาดการณ์ฝุ่นจาก Copernicus CAMS</h3><p>CAMS พยากรณ์องค์ประกอบบรรยากาศวันละ 2 รอบ ล่วงหน้าถึง 120 ชั่วโมงจากเวลารอบพยากรณ์ เว็บไซต์ใช้ AOD 550 nm รายชั่วโมง เฉพาะกริด 0.4° ที่ครอบคลุมพรุควนเคร็ง และตัดแสดงตามขอบเขตจริง เปิด CAMS จะเลือกเวลาที่ใกล้ปัจจุบันที่สุดจากข้อมูลที่ดาวน์โหลดสำเร็จ สามารถเลือกชั่วโมงล่วงหน้าหรือค่าเฉลี่ยรายวันได้</p><p>ค่า PM₂.₅ แปลงด้วย Extra Trees เดิมที่ฝึกกับ AOD 470 nm การใช้กับ CAMS AOD 550 nm ยังไม่ได้สอบเทียบหรือตรวจสอบกับสถานี จึงมีความไม่แน่นอนเพิ่มเติม ผลลัพธ์เป็นการประมาณจาก AOD พยากรณ์ ไม่ใช่ค่า PM₂.₅ พยากรณ์โดยตรงของ CAMS และไม่ใช่ค่าตรวจวัด ข้อมูลรายวันใช้ AOD เฉลี่ยครบ 24 ชั่วโมงตามเวลาไทยก่อนเข้าโมเดล</p></article>
+      <article><span>05</span><h3>Empirical Model</h3><p>ประมาณฝุ่นขนาดเล็กจากค่า PM₂.₅ ด้วยสมการเชิงประจักษ์:<br><strong>PM₁ = 0.80 × PM₂.₅ − 0.71</strong><br><strong>PM₀.₁ = 0.14 × PM₂.₅ − 0.40</strong><br>ทุกค่าใช้หน่วย µg/m³ · ที่มา: <strong>(CALLAB)</strong></p><p>คำนวณต่อจากค่าประเมิน PM₂.₅ ของแหล่งข้อมูลและเวลาที่เลือก ไม่ใช่การตรวจวัดฝุ่นแต่ละขนาดโดยตรง ค่าที่สมการให้ผลต่ำกว่า 0 จะไม่แสดงและไม่นับรวมค่าเฉลี่ย สีของ PM₁ และ PM₀.₁ ใช้เทียบระดับความเข้มข้นเท่านั้น ไม่มีการจัดระดับสุขภาพจากเกณฑ์ PM₂.₅</p></article>
+    </div><p class="cams-method-note">รหัสสีของ PM₁ และ PM₀.₁ เป็นรหัสสีเบื้องต้น ยังไม่สามารถใช้ในการเชื่อมโยงกับผลกระทบต่อสุขภาพได้ในขณะนี้ ขอบเขตของรหัสสีคำนวณจากสัดส่วนของ PM₁ (80%) และ PM₀.₁ (15%) ของ PM₂.₅ ที่ได้จากค่าเฉลี่ยจากการวิจัยระยะยาวในหลายภูมิภาคและหลายประเทศในเอเชียตะวันออกเฉียงใต้ ส่วนการกำหนดสีของ PM₁ และ PM₀.₁ กับผลกระทบต่อสุขภาพอยู่ระหว่างการวิจัย</p></details>
   </main>
   <footer class="site-footer"><div><strong>พรุควนเคร็ง / PM₂.₅</strong><span>ข้อมูลประเมินจากดาวเทียม · แสดงตามวันที่มีข้อมูลจริง</span></div><div><a id="provider-link" href="https://lpdaac.usgs.gov/products/mcd19a2v061/" target="_blank" rel="noopener noreferrer">NASA MAIAC ↗</a><a id="provider-documentation" href="https://lpdaac.usgs.gov/documents/1500/MCD19_User_Guide_V61.pdf" target="_blank" rel="noopener noreferrer">คู่มือ QA ↗</a></div></footer>
 </body>

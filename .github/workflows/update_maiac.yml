@@ -85,6 +85,23 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+      - name: Wait for Pages artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import os, time, requests
+          url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}/artifacts"
+          for attempt in range(8):
+              response=requests.get(url,headers={'Authorization':f"Bearer {os.environ['GH_TOKEN']}"},timeout=20)
+              response.raise_for_status()
+              if any(a['name']=='github-pages' and not a['expired'] for a in response.json()['artifacts']):
+                  print('Pages artifact metadata is available')
+                  break
+              time.sleep(5)
+          else:
+              raise RuntimeError('Pages artifact metadata is not available yet')
+          PY
       - name: Deploy site
         id: deployment
         uses: actions/deploy-pages@v4
