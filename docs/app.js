@@ -137,7 +137,7 @@
     });
     const url = new URL(location.href);
     url.searchParams.set("date", day.date);
-    if (idwMode) url.searchParams.set("view", "idw"); else url.searchParams.delete("view");
+    url.searchParams.set("view", idwMode ? "idw" : "source");
     window.history.replaceState(null, "", url);
     if(idwMode && idwAvailable)showSurface(day,points);
   }
@@ -221,7 +221,7 @@
       map.fitBounds(gridLayer.getBounds(), {padding: [22, 22]});
       buildChart();
       const queryDate = new URLSearchParams(location.search).get("date");
-      if (new URLSearchParams(location.search).get("view") === "idw") $("display-mode").value="idw";
+      $("display-mode").value = new URLSearchParams(location.search).get("view") === "source" ? "source" : "idw";
       const queryIndex = dataset.days.findIndex(day => day.date === queryDate);
       selectIndex(queryIndex >= 0 ? queryIndex : dataset.days.length - 1);
       dateInput.addEventListener("change", () => {

@@ -15,7 +15,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/proj4@2.23.0/dist/proj4.js" integrity="sha384-KGba/0m6kKhwuERvWz69nrarKaRxkcEwit9R9pqp5+lKuLqW7TQDkWhbqEMCvo9/" crossorigin="anonymous"></script>
   <script defer src="./idw.js?v=2"></script>
   <script defer src="./surface.js?v=2"></script>
-  <script defer src="./app.js?v=5"></script>
+  <script defer src="./app.js?v=6"></script>
 </head>
 <body>
   <header class="site-header">
@@ -56,7 +56,7 @@
       <div class="map-column">
         <div class="map-topline"><div><span class="panel-step">02 / แผนที่รายวัน</span><h2 id="map-title">กำลังโหลดแผนที่…</h2></div><span class="map-meta">EPSG:4326 <span class="meta-divider">•</span> 1 × 1 กม.</span></div>
         <div class="map-toolbar">
-          <label>แสดงผล<select id="display-mode"><option value="source">PM₂.₅ ณ ตำแหน่งที่มีข้อมูล</option><option value="idw">การประมาณ PM₂.₅ ด้วยวิธี IDW</option></select></label>
+          <label>แสดงผล<select id="display-mode"><option value="idw" selected>การประมาณค่าฝุ่น PM₂.₅</option><option value="source">PM₂.₅ ณ ตำแหน่งที่มีข้อมูล</option></select></label>
           <label>แผนที่ฐาน<select id="basemap"><option value="osm">OpenStreetMap</option><option value="imagery">World Imagery</option><option value="topo">World Topo Map</option></select></label>
         </div>
         <p id="view-note" class="view-note" role="status">ค่าประเมินจากโมเดล ณ ตำแหน่งที่มี AOD ผ่าน QA</p>
