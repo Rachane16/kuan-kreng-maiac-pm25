@@ -84,7 +84,7 @@
   }
   function configureSource(){
     const isCams=selectedSource==='cams',label=D.labels[pollutant];
-    $('data-source').value=sourcePreference;$('cams-controls').hidden=!isCams;$('cams-time-mode').value=camsMode;
+    $('data-source').value=selectedSource;$('cams-controls').hidden=!isCams;$('cams-time-mode').value=camsMode;
     $('forecast-time-label').hidden=camsMode!=='hourly';$('nearest-now').disabled=!forecast.hours.some(h=>h.status==='Available');
     const display=$('display-mode');
     display.innerHTML=isCams?`<option value="cams">การประมาณค่าฝุ่น ${label}</option>`:`<option value="idw">การประมาณค่าฝุ่น ${label}</option><option value="source">${label} ณ ตำแหน่งที่มีข้อมูล</option>`;
@@ -163,7 +163,17 @@
     if(hourly&&selectedHour)url.searchParams.set('at',selectedHour);else url.searchParams.delete('at');window.history.replaceState(null,'',url);
     if(idwAvailable)showSurface(day,result);
   }
-  function chooseDate(date,mode){const index=dates.indexOf(date);if(index<0)return;selectedIndex=index;selectedHour=null;camsMode=mode||(date>=D.thaiDay()?'hourly':'daily');followNow=date===D.thaiDay()&&camsMode==='hourly';render();}
+  function chooseDate(date,mode){
+    const index=dates.indexOf(date);if(index<0)return;
+    selectedIndex=index;selectedHour=null;
+    // Every newly selected day starts with MAIAC when available, otherwise CAMS.
+    // A manual source switch applies to this day and never changes its date.
+    const wasManual=sourcePreference!=='auto';sourcePreference='auto';
+    camsMode=mode||(date>=D.thaiDay()?'hourly':'daily');
+    followNow=date===D.thaiDay()&&camsMode==='hourly';
+    if(wasManual)buildChart();
+    render();
+  }
   function nearestNow(){const hour=D.nearest(forecast.hours);if(!hour)return;sourcePreference='cams';camsMode='hourly';selectedHour=hour.valid_time;selectedIndex=dates.indexOf(D.thaiDay(hour.valid_time));followNow=true;buildChart();render();}
   async function init(){
     try{
@@ -220,7 +230,7 @@
       camsMode=['daily','hourly'].includes(query.get('period'))?query.get('period'):(date>=D.thaiDay()?'hourly':'daily');selectedHour=query.get('at');followNow=!query.has('at');
       if(sourcePreference==='cams'&&!query.has('date')){const hour=D.nearest(forecast.hours);if(hour){selectedHour=hour.valid_time;selectedIndex=dates.indexOf(D.thaiDay(hour.valid_time));camsMode='hourly';}}
       buildChart();render();
-      $('data-source').addEventListener('change',()=>{sourcePreference=$('data-source').value;if(sourcePreference==='cams'&&forecast.hours.length){nearestNow();return;}buildChart();render();});
+      $('data-source').addEventListener('change',()=>{sourcePreference=$('data-source').value;buildChart();render();});
       dateInput.addEventListener('change',()=>chooseDate(dateInput.value));slider.addEventListener('input',()=>chooseDate(dates[Number(slider.value)]));
       $('prev-day').addEventListener('click',()=>chooseDate(dates[selectedIndex-1]));$('next-day').addEventListener('click',()=>chooseDate(dates[selectedIndex+1]));
       $('display-mode').addEventListener('change',()=>{savedMaiacMode=$('display-mode').value;render();});$('cams-time-mode').addEventListener('change',()=>{camsMode=$('cams-time-mode').value;selectedHour=null;followNow=false;render();});

@@ -16,7 +16,7 @@
   <script defer src="./idw.js?v=2"></script>
   <script defer src="./surface.js?v=3"></script>
   <script defer src="./data-utils.js?v=1"></script>
-  <script defer src="./app.js?v=8"></script>
+  <script defer src="./app.js?v=9"></script>
 </head>
 <body>
   <header class="site-header">
@@ -57,7 +57,7 @@
       <div class="map-column">
         <div class="map-topline"><div><span class="panel-step">02 / แผนที่รายวัน</span><h2 id="map-title">กำลังโหลดแผนที่…</h2></div><span class="map-meta" id="map-resolution">EPSG:4326 · กริดรายงาน 1 × 1 กม.</span></div>
         <div class="map-toolbar">
-          <label>แหล่งข้อมูล<select id="data-source"><option value="auto">อัตโนมัติ · MAIAC ก่อน</option><option value="maiac">MAIAC</option><option value="cams">CAMS</option></select></label>
+          <label>แหล่งข้อมูล<select id="data-source"><option value="maiac">MAIAC</option><option value="cams" selected>CAMS</option></select></label>
           <fieldset class="pollutant-picker"><legend>ขนาดฝุ่น</legend><label><input type="radio" name="pollutant" value="pm25" checked><span>PM₂.₅</span></label><label><input type="radio" name="pollutant" value="pm1"><span>PM₁</span></label><label><input type="radio" name="pollutant" value="pm01"><span>PM₀.₁</span></label></fieldset>
           <label>แสดงผล<select id="display-mode"><option value="idw" selected>การประมาณค่าฝุ่น PM₂.₅</option><option value="source">PM₂.₅ ณ ตำแหน่งที่มีข้อมูล</option></select></label>
           <label>แผนที่ฐาน<select id="basemap"><option value="osm">OpenStreetMap</option><option value="imagery">World Imagery</option><option value="topo">World Topo Map</option></select></label>
