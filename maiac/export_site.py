@@ -29,6 +29,9 @@ def export_site(start: date, end: date, boundary_path: Path, grid_path: Path,
         "sample_y": round(float(points.iloc[i].y), 3)},
         "geometry": mapping(row.geometry)} for i, row in enumerate(clipped.itertuples())]
     site_data_dir.mkdir(parents=True, exist_ok=True)
+    gpd.GeoDataFrame({"name": ["Khuan Kreng Peat Swamp Forest"]},
+                     geometry=[boundary], crs="EPSG:32647").to_crs("EPSG:4326").to_file(
+                         site_data_dir / "boundary.geojson", driver="GeoJSON")
     grid_file = site_data_dir / "grid.geojson"
     grid_file.write_text(json.dumps({"type": "FeatureCollection", "features": features},
                                     ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

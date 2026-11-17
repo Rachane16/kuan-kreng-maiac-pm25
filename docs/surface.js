@@ -35,7 +35,7 @@ window.KKSurface = {
         const latlng=mercator.unproject(L.point(mx,my));
         const [x,y]=project.forward([latlng.lng,latlng.lat]);
         const value=sampler(x,y).value;
-        const rgb=value<=15?[0,184,230]:value<=25?[32,199,71]:value<=37.5?[255,224,49]:value<=75?[255,147,30]:[240,68,56];
+        const rgb=value<=15?[149,220,255]:value<=25?[190,234,143]:value<=37.5?[255,229,147]:value<=75?[255,194,149]:[218,139,133];
         data[offset]=rgb[0];data[offset+1]=rgb[1];data[offset+2]=rgb[2];
         data[offset+3]=255;
       }

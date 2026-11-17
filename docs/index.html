@@ -10,12 +10,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
-  <link rel="stylesheet" href="./style.css?v=3">
+  <link rel="stylesheet" href="./style.css?v=4">
   <script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/proj4@2.23.0/dist/proj4.js" integrity="sha384-KGba/0m6kKhwuERvWz69nrarKaRxkcEwit9R9pqp5+lKuLqW7TQDkWhbqEMCvo9/" crossorigin="anonymous"></script>
   <script defer src="./idw.js?v=2"></script>
-  <script defer src="./surface.js?v=1"></script>
-  <script defer src="./app.js?v=4"></script>
+  <script defer src="./surface.js?v=2"></script>
+  <script defer src="./app.js?v=5"></script>
 </head>
 <body>
   <header class="site-header">
@@ -64,9 +64,9 @@
         <div class="map-footer">
           <div class="legend-title">ความเข้มข้น PM₂.₅ <span>(µg/m³ · สีอ้างอิงกรมควบคุมมลพิษ)</span></div>
           <div class="legend-levels">
-            <span><i style="background:#00b8e6"></i><b>ดีมาก</b> 0–15</span><span><i style="background:#20c747"></i><b>ดี</b> &gt;15–25</span><span><i style="background:#ffe031"></i><b>ปานกลาง</b> &gt;25–37.5</span><span><i style="background:#ff931e"></i><b>เริ่มมีผลต่อสุขภาพ</b> &gt;37.5–75</span><span><i style="background:#f04438"></i><b>มีผลต่อสุขภาพ</b> &gt;75</span>
+            <span><i style="background:#95dcff"></i><b>ดีมาก</b> 0–15</span><span><i style="background:#beea8f"></i><b>ดี</b> &gt;15–25</span><span><i style="background:#ffe593"></i><b>ปานกลาง</b> &gt;25–37.5</span><span><i style="background:#ffc295"></i><b>เริ่มมีผลต่อสุขภาพ</b> &gt;37.5–75</span><span><i style="background:#da8b85"></i><b>มีผลต่อสุขภาพ</b> &gt;75</span>
           </div><div class="no-data-key"><i></i><span id="nodata-label">ไม่มี AOD ผ่าน QA</span></div>
-          <small class="legend-note">ใช้สีเพื่อเทียบช่วงค่าประเมินจากดาวเทียม ไม่ใช่การรายงาน AQI จากสถานี</small>
+          <div class="boundary-key"><i aria-hidden="true"></i> ขอบเขตพรุควนเคร็ง</div><small class="legend-note">ใช้สีเพื่อเทียบช่วงค่าประเมินจากดาวเทียม ไม่ใช่การรายงาน AQI จากสถานี</small>
         </div>
       </div>
     </section>

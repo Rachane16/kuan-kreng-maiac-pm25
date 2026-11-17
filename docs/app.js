@@ -54,7 +54,7 @@
   })[c]);
 
   function color(value) {
-    return value <= 15 ? "#00b8e6" : value <= 25 ? "#20c747" : value <= 37.5 ? "#ffe031" : value <= 75 ? "#ff931e" : "#f04438";
+    return value <= 15 ? "#95dcff" : value <= 25 ? "#beea8f" : value <= 37.5 ? "#ffe593" : value <= 75 ? "#ffc295" : "#da8b85";
   }
 
   function statusText(day) {
@@ -168,11 +168,11 @@
 
   async function init() {
     try {
-      const [gridResponse, historyResponse] = await Promise.all([
-        fetch("./data/grid.geojson"), fetch("./data/history.json", {cache: "no-store"})
+      const [gridResponse, historyResponse, boundaryResponse] = await Promise.all([
+        fetch("./data/grid.geojson"), fetch("./data/history.json", {cache: "no-store"}), fetch("./data/boundary.geojson")
       ]);
-      if (!gridResponse.ok || !historyResponse.ok) throw new Error("โหลดไฟล์ข้อมูลไม่สำเร็จ");
-      const [grid, dataset] = await Promise.all([gridResponse.json(), historyResponse.json()]);
+      if (!gridResponse.ok || !historyResponse.ok || !boundaryResponse.ok) throw new Error("โหลดไฟล์ข้อมูลไม่สำเร็จ");
+      const [grid, dataset, boundary] = await Promise.all([gridResponse.json(), historyResponse.json(), boundaryResponse.json()]);
       if (!window.L || !dataset.days?.length || !grid.features?.length) throw new Error("ข้อมูลแผนที่ไม่สมบูรณ์");
       history = dataset;
       gridData=grid;
@@ -207,10 +207,17 @@
             if($('display-mode').value!=='idw' || !currentSampler)return;
             const [x,y]=utmProject.forward([event.latlng.lng,event.latlng.lat]);
             const estimate=currentSampler(x,y);
-            L.popup().setLatLng(event.latlng).setContent(`<div class="popup-label">IDW ณ ตำแหน่งที่เลือก</div><div class="popup-value">${estimate.value.toFixed(2)} <small>µg/m³</small></div><div class="popup-meta">ค่าประมาณจากจุดตั้งต้นของวันเดียวกัน<br>จุดใกล้ที่สุด ${(estimate.distance/1000).toFixed(2)} กม.<br>ใช้ ${estimate.neighbours} จุดใกล้ที่สุด<br>ตาข่ายแสดงผล 100 ม. · ข้อมูลต้นทาง 1 กม.</div>`).openOn(map);
+            L.popup().setLatLng(event.latlng).setContent(`<div class="popup-label">IDW ณ ตำแหน่งที่เลือก</div><div class="popup-value">${estimate.value.toFixed(2)} <small>µg/m³</small></div>`).openOn(map);
           });
         }
       }).addTo(map);
+      // Dedicated pane keeps the study boundary above both the raster and grid.
+      map.createPane('study-boundary');
+      map.getPane('study-boundary').style.zIndex=450;
+      map.getPane('study-boundary').style.pointerEvents='none';
+      const boundaryStyle={pane:'study-boundary',interactive:false,fill:false,dashArray:'8 6',lineCap:'round',lineJoin:'round'};
+      L.geoJSON(boundary,{style:{...boundaryStyle,color:'#ffffff',weight:4.5,opacity:.85},interactive:false,pane:'study-boundary'}).addTo(map);
+      L.geoJSON(boundary,{style:{...boundaryStyle,color:'#285447',weight:2,opacity:1},interactive:false,pane:'study-boundary'}).addTo(map);
       map.fitBounds(gridLayer.getBounds(), {padding: [22, 22]});
       buildChart();
       const queryDate = new URLSearchParams(location.search).get("date");

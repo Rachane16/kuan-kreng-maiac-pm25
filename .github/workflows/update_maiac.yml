@@ -50,7 +50,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/data/history.json docs/data/grid.geojson
+          git add docs/data/history.json docs/data/grid.geojson docs/data/boundary.geojson
           if ! git diff --cached --quiet; then
             git commit -m 'Update rolling MAIAC dashboard data'
             git push
