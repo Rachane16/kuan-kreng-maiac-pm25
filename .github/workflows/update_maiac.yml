@@ -1,9 +1,6 @@
 name: Update MAIAC dashboard
 
 on:
-  schedule:
-    # 20:23 Asia/Bangkok. Avoid the top of the hour, when scheduled runs can be delayed.
-    - cron: '23 13 * * *'
   workflow_dispatch:
 
 concurrency:

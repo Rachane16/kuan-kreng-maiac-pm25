@@ -67,7 +67,7 @@ python -m http.server 8765 --directory docs
 
 ### อัปเดตรายวันผ่าน GitHub Actions
 
-Workflow `.github/workflows/update_maiac.yml` ตั้งเวลา 20:23 น. ประเทศไทยทุกวัน และสั่งรันเองได้ด้วย `workflow_dispatch` โดยใช้ `maiac.refresh_site` คงช่วง 92 วันล่าสุด ตรวจเฉพาะวันที่เพิ่งเพิ่ม วันที่ NASA ยังไม่เผยแพร่ และ 3 วันล่าสุดเพื่อเปลี่ยนจาก NRT เป็นไฟล์มาตรฐานเมื่อมีไฟล์ใหม่ ระบบจะเก็บ `NoData` และ `NotPublished` ตามจริง ถ้าดาวน์โหลดหรือประมวลผลผิดพลาด Workflow จะหยุดก่อนเผยแพร่ ทำให้เว็บเดิมยังคงใช้ได้
+Workflow `.github/workflows/update_maiac.yml` เตรียมสำหรับการตรวจเวลา 20:23 น. ประเทศไทยทุกวัน โดยใช้ `maiac.refresh_site` คงช่วง 92 วันล่าสุด ตรวจเฉพาะวันที่เพิ่งเพิ่ม วันที่ NASA ยังไม่เผยแพร่ และ 3 วันล่าสุดเพื่อเปลี่ยนจาก NRT เป็นไฟล์มาตรฐานเมื่อมีไฟล์ใหม่ ระบบจะเก็บ `NoData` และ `NotPublished` ตามจริง ถ้าดาวน์โหลดหรือประมวลผลผิดพลาด Workflow จะหยุดก่อนเผยแพร่ ทำให้เว็บเดิมยังคงใช้ได้ ขณะรอ Earthdata token ใน GitHub Secret เปิดใช้เฉพาะ `workflow_dispatch`; จะเพิ่ม `schedule` หลังทดสอบรันจริงผ่าน
 
 ก่อนเปิดใช้งาน ต้องเพิ่ม repository secrets สองค่าใน GitHub: `NASA_EARTHDATA_TOKEN` สำหรับ NASA และ `MODEL_DECRYPT_KEY_B64` สำหรับถอดรหัสไฟล์ `models/Extra_Trees_model.pkl.aesgcm` ที่สร้างจากโมเดลต้นฉบับ ห้ามใส่ค่า secret ใน YAML, HTML, JavaScript, JSON หรือ Git commit จากนั้นตั้ง Pages Source เป็น **GitHub Actions** และรัน Workflow ด้วยมือหนึ่งครั้งเพื่อทดสอบ ก่อนปล่อยให้ตารางเวลาทำงาน หากไม่มี secrets Workflow จะไม่สามารถคำนวณข้อมูลใหม่ได้
 
