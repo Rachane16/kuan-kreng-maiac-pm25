@@ -1,7 +1,20 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {interpolate} = require('../docs/idw.js');
+const {interpolate,createSampler} = require('../docs/idw.js');
 const triangle = [{x:0,y:0,value:10},{x:1000,y:0,value:30},{x:0,y:1000,value:20}];
+test('indexed dense-surface sampler agrees with reference IDW at arbitrary coordinates',()=>{
+  const points=Array.from({length:50},(_,i)=>({x:Math.sin(i*3.1)*9000,y:Math.cos(i*1.3)*7000,value:5+i}));
+  const targets=Array.from({length:100},(_,i)=>({id:i,x:i*132-6000,y:i*81-4000}));
+  const sampler=createSampler(points),reference=interpolate(points,targets);
+  reference.values.forEach((v,i)=>{
+    const out=sampler(targets[i].x,targets[i].y);
+    assert.ok(Math.abs(out.value-v.value)<1e-9);
+    assert.ok(Math.abs(out.distance-v.distance)<1e-9);
+    assert.equal(out.neighbours,v.neighbours);
+  });
+  assert.equal(createSampler(triangle)(0,0).value,10);
+  assert.equal(createSampler(triangle.slice(0,2)),null);
+});
 test('IDW preserves source values and gives the expected distance-weighted estimate', () => {
   const out=interpolate(triangle,[{id:'source',x:0,y:0},{id:'middle',x:500,y:500}]);
   assert.equal(out.status,'available');

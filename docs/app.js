@@ -13,6 +13,33 @@
   let basemaps;
   let activeBasemap;
   const idwCache = new Map();
+  const surfaceCache = new Map();
+  let surfaceLayer, surfaceJob=0, currentSampler=null, gridData, utmProject;
+
+  async function showSurface(day, points) {
+    const job=++surfaceJob;
+    if(surfaceLayer){map.removeLayer(surfaceLayer);surfaceLayer=null;}
+    currentSampler=KKIDW.createSampler(points);
+    if(!currentSampler)return;
+    const note=$('view-note');
+    note.textContent=`กำลังสร้างผืนสี IDW · ใช้ ${points.length.toLocaleString('th-TH')} จุดตั้งต้น`;
+    try {
+      let surface=surfaceCache.get(day.date);
+      if(!surface){
+        surface=await KKSurface.render(gridData,gridLayer.getBounds(),currentSampler,utmProject,()=>job!==surfaceJob);
+        if(!surface || job!==surfaceJob)return;
+        surfaceCache.set(day.date,surface);
+        if(surfaceCache.size>3)surfaceCache.delete(surfaceCache.keys().next().value);
+      }
+      if(job!==surfaceJob)return;
+      surfaceLayer=L.imageOverlay(surface.url,gridLayer.getBounds(),{opacity:.64,interactive:false,className:'idw-surface'}).addTo(map);
+      note.textContent=`ผืนสีต่อเนื่อง IDW · ใช้ ${points.length.toLocaleString('th-TH')} จุดตั้งต้น · คลิกแผนที่เพื่อดูค่าประมาณ ณ ตำแหน่งนั้น`;
+    } catch(error) {
+      if(job!==surfaceJob)return;
+      currentSampler=null;
+      note.textContent='ไม่สามารถสร้างผืนสี IDW ได้ กรุณาลองเลือกวันที่อีกครั้ง';
+    }
+  }
 
   const thaiDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("th-TH", {
     timeZone: "UTC", day: "numeric", month: "short", year: "numeric"
@@ -57,13 +84,19 @@
     const result = idwMode ? idwCache.get(day.date) : null;
     const estimates = new Map(result?.values.map(item => [item.id, item]) || []);
     const idwAvailable = result?.status === "available";
+    const points=targets.filter(t=>samples.has(t.id)).map(t=>({...t,value:Number(samples.get(t.id)[2])}));
+    map.closePopup();
+    if(!(idwMode && idwAvailable)) {
+      surfaceJob++;currentSampler=null;
+      if(surfaceLayer){map.removeLayer(surfaceLayer);surfaceLayer=null;}
+    }
     const messageText = idwMode && day.available_cells > 0 && !idwAvailable
       ? "ข้อมูลไม่เพียงพอสำหรับ IDW ต้องมีอย่างน้อย 3 จุดที่ไม่เรียงเป็นเส้นเดียวกัน" : statusText(day);
     $("view-note").textContent = idwMode
-      ? idwAvailable ? `IDW ครอบคลุม ${targets.length.toLocaleString("th-TH")} ช่อง · ใช้ ${samples.size.toLocaleString("th-TH")} จุดตั้งต้น · คลิกช่องเพื่อดูแหล่งที่มาของค่า`
+      ? idwAvailable ? `กำลังแสดงผืนสีต่อเนื่อง IDW · ใช้ ${samples.size.toLocaleString("th-TH")} จุดตั้งต้น`
         : `IDW ยังไม่พร้อม · ${messageText}`
       : "ค่าประเมินจากโมเดล ณ ตำแหน่งที่มี AOD ผ่าน QA";
-    $("mean-label").textContent = idwMode ? "ค่าเฉลี่ยทั้งพื้นที่ (รวม IDW)" : "ค่าเฉลี่ยของช่องที่มีข้อมูล";
+    $("mean-label").textContent = idwMode ? "ค่าเฉลี่ยกริด 1 กม. (รวม IDW)" : "ค่าเฉลี่ยของช่องที่มีข้อมูล";
     $("nodata-label").textContent = idwMode ? "ไม่มีค่าประมาณ IDW" : "ไม่มี AOD ผ่าน QA";
     dateInput.value = day.date;
     slider.value = selectedIndex;
@@ -92,18 +125,21 @@
       const value = idwMode ? estimate?.value : sample ? Number(sample[2]) : undefined;
       const hasValue = Number.isFinite(value);
       layer.setStyle({
+        stroke: !idwMode,
         color: hasValue ? "#536a68" : "#a2b3b0", weight: hasValue ? .55 : .38,
         opacity: hasValue ? .7 : .6,
         fillColor: hasValue ? color(value) : "#bfcbca",
-        fillOpacity: hasValue ? .76 : .34
+        fillOpacity: idwMode ? 0 : hasValue ? .76 : .34
       });
       layer.unbindPopup();
-      layer.bindPopup(idwMode && !idwAvailable ? `<div class="popup-nodata">${escapeHtml(messageText)}</div>` : popupContent(gridId, sample, estimate));
+      if(!idwMode)layer.bindPopup(popupContent(gridId,sample,estimate));
+      else if(!idwAvailable)layer.bindPopup(`<div class="popup-nodata">${escapeHtml(messageText)}</div>`);
     });
     const url = new URL(location.href);
     url.searchParams.set("date", day.date);
     if (idwMode) url.searchParams.set("view", "idw"); else url.searchParams.delete("view");
     window.history.replaceState(null, "", url);
+    if(idwMode && idwAvailable)showSurface(day,points);
   }
 
   function selectIndex(index) {
@@ -139,6 +175,9 @@
       const [grid, dataset] = await Promise.all([gridResponse.json(), historyResponse.json()]);
       if (!window.L || !dataset.days?.length || !grid.features?.length) throw new Error("ข้อมูลแผนที่ไม่สมบูรณ์");
       history = dataset;
+      gridData=grid;
+      if(!window.proj4 || !window.KKSurface)throw new Error('เครื่องมือแสดงผืนสี IDW ยังไม่พร้อม');
+      utmProject=proj4('EPSG:4326','+proj=utm +zone=47 +datum=WGS84 +units=m +no_defs');
       targets = grid.features.map(f => ({id:f.properties.grid_id, x:f.properties.sample_x, y:f.properties.sample_y, weight:f.properties.coverage_fraction}));
       if (targets.some(t => ![t.x,t.y,t.weight].every(Number.isFinite))) throw new Error("พิกัดกริดสำหรับ IDW ไม่สมบูรณ์");
       $("range-label").textContent = `${dataset.days.length} วัน`;
@@ -162,7 +201,15 @@
       $("basemap").addEventListener("change", () => { map.removeLayer(activeBasemap); activeBasemap=basemaps[$("basemap").value].addTo(map); });
       gridLayer = L.geoJSON(grid, {
         style: {color: "#a2b3b0", weight: .38, fillColor: "#bfcbca", fillOpacity: .34},
-        onEachFeature(feature, layer) { layerById.set(feature.properties.grid_id, layer); }
+        onEachFeature(feature, layer) {
+          layerById.set(feature.properties.grid_id, layer);
+          layer.on('click',event=>{
+            if($('display-mode').value!=='idw' || !currentSampler)return;
+            const [x,y]=utmProject.forward([event.latlng.lng,event.latlng.lat]);
+            const estimate=currentSampler(x,y);
+            L.popup().setLatLng(event.latlng).setContent(`<div class="popup-label">IDW ณ ตำแหน่งที่เลือก</div><div class="popup-value">${estimate.value.toFixed(2)} <small>µg/m³</small></div><div class="popup-meta">ค่าประมาณจากจุดตั้งต้นของวันเดียวกัน<br>จุดใกล้ที่สุด ${(estimate.distance/1000).toFixed(2)} กม.<br>ใช้ ${estimate.neighbours} จุดใกล้ที่สุด<br>ตาข่ายแสดงผล 100 ม. · ข้อมูลต้นทาง 1 กม.</div>`).openOn(map);
+          });
+        }
       }).addTo(map);
       map.fitBounds(gridLayer.getBounds(), {padding: [22, 22]});
       buildChart();
