@@ -5,6 +5,8 @@
   const slider = $("date-range");
   const status = $("selection-status");
   let history;
+  let datasets, selectedSource='maiac', camsLayer, savedMaiacMode='idw';
+  const maiacOptions=$('display-mode').innerHTML;
   let map;
   let gridLayer;
   let layerById = new Map();
@@ -58,6 +60,12 @@
   }
 
   function statusText(day) {
+    if(selectedSource==='cams'){
+      if(day.status==='Available')return `CAMS มีข้อมูลครบ 24 ชั่วโมง ${day.available_cells} ช่องกริดต้นทาง`;
+      if(day.status==='Incomplete')return 'ข้อมูล CAMS ของวันเลือกยังไม่ครบ 24 ชั่วโมง';
+      if(day.status==='NoData')return 'CAMS ไม่มี AOD ที่ใช้ประเมินรายวันได้ครบ 24 ชั่วโมง';
+      return 'ยังไม่มีข้อมูล CAMS ที่ประมวลผลแล้วสำหรับวันที่เลือก';
+    }
     if (day.status === "Available") return `พบ AOD ผ่าน QA ${day.available_cells.toLocaleString("th-TH")} ช่องในวันที่เลือก`;
     if (day.status === "NoData") return "NASA มีไฟล์ของวันนี้ แต่ไม่มี AOD ในพื้นที่ที่ผ่าน QA";
     if (day.status === "NotPublished") return "NASA ยังไม่มีไฟล์ของวันที่เลือกสำหรับพื้นที่นี้";
@@ -76,7 +84,8 @@
   function render() {
     const day = history.days[selectedIndex];
     const samples = new Map(day.cells.map(item => [item[0], item]));
-    const idwMode = $("display-mode").value === "idw";
+    const isCams=selectedSource==='cams';
+    const idwMode = !isCams && $("display-mode").value === "idw";
     if (idwMode && !idwCache.has(day.date)) {
       const points = targets.filter(t => samples.has(t.id)).map(t => ({...t, value:Number(samples.get(t.id)[2])}));
       idwCache.set(day.date, KKIDW.interpolate(points, targets));
@@ -95,9 +104,11 @@
     $("view-note").textContent = idwMode
       ? idwAvailable ? `กำลังแสดงผืนสีต่อเนื่อง IDW · ใช้ ${samples.size.toLocaleString("th-TH")} จุดตั้งต้น`
         : `IDW ยังไม่พร้อม · ${messageText}`
-      : "ค่าประเมินจากโมเดล ณ ตำแหน่งที่มี AOD ผ่าน QA";
-    $("mean-label").textContent = idwMode ? "ค่าเฉลี่ยกริด 1 กม. (รวม IDW)" : "ค่าเฉลี่ยของช่องที่มีข้อมูล";
-    $("nodata-label").textContent = idwMode ? "ไม่มีค่าประมาณ IDW" : "ไม่มี AOD ผ่าน QA";
+      : isCams ? 'CAMS AOD 550 nm · ค่าเฉลี่ย 24 ชั่วโมงตามเวลาไทย · กริดต้นทาง 0.4° ตัดตามขอบเขตพื้นที่' : "ค่าประเมินจากโมเดล ณ ตำแหน่งที่มี AOD ผ่าน QA";
+    $("mean-label").textContent = isCams ? 'ค่าเฉลี่ยพื้นที่จาก CAMS' : idwMode ? "ค่าเฉลี่ยกริด 1 กม. (รวม IDW)" : "ค่าเฉลี่ยของช่องที่มีข้อมูล";
+    $("nodata-label").textContent = isCams ? 'ไม่มีข้อมูล CAMS รายวัน' : idwMode ? "ไม่มีค่าประมาณ IDW" : "ไม่มี AOD ผ่าน QA";
+    $('cams-time-row').hidden=!isCams;
+    $('cams-period').textContent=isCams && day.forecast_base_time ? `${thaiTime(day.period_start_utc)} ถึง ${thaiTime(day.period_end_utc)} (ไม่รวมเวลาสิ้นสุด)` : '—';
     dateInput.value = day.date;
     slider.value = selectedIndex;
     $("map-title").textContent = thaiDate(day.date);
@@ -119,7 +130,7 @@
       bar.classList.toggle("selected", i === selectedIndex);
       bar.setAttribute("aria-pressed", i === selectedIndex ? "true" : "false");
     });
-    layerById.forEach((layer, gridId) => {
+    if(!isCams)layerById.forEach((layer, gridId) => {
       const sample = samples.get(gridId);
       const estimate = estimates.get(gridId);
       const value = idwMode ? estimate?.value : sample ? Number(sample[2]) : undefined;
@@ -135,9 +146,17 @@
       if(!idwMode)layer.bindPopup(popupContent(gridId,sample,estimate));
       else if(!idwAvailable)layer.bindPopup(`<div class="popup-nodata">${escapeHtml(messageText)}</div>`);
     });
+    if(isCams)camsLayer.eachLayer(layer=>{
+      const sample=samples.get(layer.feature.properties.grid_id);
+      layer.setStyle({color:'#718b81',weight:.8,fillColor:sample?color(Number(sample[2])):'#bfcbca',fillOpacity:sample ? .72 : .25});
+      const base=day.forecast_base_time?thaiTime(day.forecast_base_time):'—';
+      const value=sample?`<div class="popup-value">${Number(sample[2]).toFixed(2)} <small>µg/m³</small></div><div class="popup-meta">AOD 550 nm เฉลี่ย: ${Number(sample[1]).toFixed(4)}<br>ข้อมูลครบ ${sample[3]} ชั่วโมง<br>รอบพยากรณ์: ${escapeHtml(base)}<br>Lead time: ${day.lead_time_hours?.join('–')} ชั่วโมง</div>`:'<div class="popup-nodata">ไม่มีข้อมูล CAMS รายวัน</div>';
+      layer.unbindPopup();layer.bindPopup(`<div class="popup-label">CAMS · กริดต้นทาง 0.4°</div>${value}`);
+    });
     const url = new URL(location.href);
     url.searchParams.set("date", day.date);
-    url.searchParams.set("view", idwMode ? "idw" : "source");
+    url.searchParams.set('source',selectedSource);
+    if(!isCams)url.searchParams.set("view", idwMode ? "idw" : "source");else url.searchParams.delete('view');
     window.history.replaceState(null, "", url);
     if(idwMode && idwAvailable)showSurface(day,points);
   }
@@ -149,6 +168,7 @@
 
   function buildChart() {
     const chart = $("history-chart");
+    chart.replaceChildren();
     const maxCoverage = Math.max(1, ...history.days.map(item => item.available_cells));
     history.days.forEach((day, index) => {
       const bar = document.createElement("button");
@@ -166,13 +186,56 @@
     $("chart-end").textContent = thaiDate(history.end_date);
   }
 
+  function selectSource(source, wantedDate) {
+    if(selectedSource==='maiac')savedMaiacMode=$('display-mode').value;
+    selectedSource=source;history=datasets[source];
+    const isCams=source==='cams';
+    dateInput.setAttribute('aria-label',isCams?'เลือกวันที่ของข้อมูล CAMS':'เลือกวันที่ของข้อมูล MAIAC');
+    document.title=`พรุควนเคร็ง | ${isCams?'CAMS':'MAIAC'} PM₂.₅`;
+    $('hero-eyebrow').innerHTML=`<span class="eyebrow-line"></span> ${isCams?'CAMS BASED ESTIMATION':'SATELLITE BASED ESTIMATION'}`;
+    $('data-source').value=source;
+    $('display-mode').innerHTML=isCams?'<option value="cams">การประมาณค่าฝุ่น PM₂.₅</option>':maiacOptions;
+    $('display-mode').disabled=isCams;
+    if(!isCams)$('display-mode').value=savedMaiacMode;
+    if(isCams){if(map.hasLayer(gridLayer))map.removeLayer(gridLayer);camsLayer.addTo(map);}
+    else {if(map.hasLayer(camsLayer))map.removeLayer(camsLayer);gridLayer.addTo(map);}
+    $('source-description').textContent=isCams?'Copernicus CAMS · AOD 550 nm':'NASA MCD19A2 / MCD19A2N · AOD 470 nm';
+    $('resolution-description').textContent=isCams?'0.4° × 0.4° (ประมาณ 44 กม.)':'MAIAC ประมาณ 1 กม.';
+    $('map-resolution').textContent=isCams?'กริดต้นทาง 0.4° · ตัดตามขอบเขต':'EPSG:4326 · กริดรายงาน 1 × 1 กม.';
+    $('date-timezone-label').textContent=isCams?'วันเฉลี่ยข้อมูล CAMS อ้างอิงเวลาไทย (UTC+7)':'วันที่ของผลิตภัณฑ์ NASA อ้างอิง UTC';
+    $('coverage-heading').textContent=isCams?'ช่องกริด CAMS ที่มีข้อมูลครบ 24 ชม.':'พื้นที่กริดที่มี AOD ใช้ได้';
+    $('chart-description').textContent=isCams?'ความสูงของแท่งแสดงจำนวนกริด CAMS ต้นทางที่มีข้อมูลครบ 24 ชั่วโมง เลือกแท่งเพื่อเปิดวันที่นั้น':'ความสูงของแท่งแสดงจำนวนช่องที่มี AOD ผ่าน QA เลือกแท่งเพื่อเปิดวันที่นั้น';
+    $('cams-method-note').hidden=!isCams;
+    $('maiac-method-steps').hidden=isCams;
+    $('provider-link').href=isCams?'https://ads.atmosphere.copernicus.eu/datasets/cams-global-atmospheric-composition-forecasts?tab=overview':'https://lpdaac.usgs.gov/products/mcd19a2v061/';
+    $('provider-link').textContent=isCams?'Copernicus CAMS · CC-BY ↗':'NASA MAIAC ↗';
+    $('provider-documentation').href=isCams?'https://ads.atmosphere.copernicus.eu/datasets/cams-global-atmospheric-composition-forecasts?tab=documentation':'https://lpdaac.usgs.gov/documents/1500/MCD19_User_Guide_V61.pdf';
+    $('provider-documentation').textContent=isCams?'คู่มือ CAMS ↗':'คู่มือ QA ↗';
+    $('page-title').innerHTML=isCams?'การประมาณค่าฝุ่น PM₂.₅ จาก CAMS<br><em>ในพื้นที่ป่าพรุควนเคร็ง</em>':'การประมาณค่าฝุ่น PM₂.₅ จากดาวเทียม<br><em>ในพื้นที่ป่าพรุควนเคร็ง</em>';
+    $('hero-description').textContent=isCams?'ค่าประเมิน PM₂.₅ จาก AOD 550 nm เฉลี่ยรายวันตามเวลาไทย · กริดต้นทาง 0.4°':'ค่าประเมิน PM₂.₅ รายวันจาก AOD บนกริด 1 × 1 กม.';
+    $('range-label').textContent=`${history.days.length} วัน`;
+    $('range-start').textContent=thaiDate(history.start_date);$('range-end').textContent=thaiDate(history.end_date);
+    $('generated-time').textContent=history.generated_at_utc?thaiTime(history.generated_at_utc):'ยังไม่มีชุดข้อมูล';
+    dateInput.min=history.start_date;dateInput.max=history.end_date;slider.max=history.days.length-1;
+    buildChart();
+    const index=history.days.findIndex(d=>d.date===wantedDate);
+    $('latest-with-data').disabled=!history.days.some(d=>d.status==='Available');
+    selectIndex(index>=0?index:history.days.length-1);
+  }
+
   async function init() {
     try {
-      const [gridResponse, historyResponse, boundaryResponse] = await Promise.all([
-        fetch("./data/grid.geojson"), fetch("./data/history.json", {cache: "no-store"}), fetch("./data/boundary.geojson")
+      const [gridResponse, historyResponse, boundaryResponse, camsGridResponse, camsHistoryResponse] = await Promise.all([
+        fetch("./data/grid.geojson"), fetch("./data/history.json", {cache: "no-store"}), fetch("./data/boundary.geojson"),
+        fetch('./data/cams_grid.geojson'),fetch('./data/cams_history.json',{cache:'no-store'})
       ]);
       if (!gridResponse.ok || !historyResponse.ok || !boundaryResponse.ok) throw new Error("โหลดไฟล์ข้อมูลไม่สำเร็จ");
       const [grid, dataset, boundary] = await Promise.all([gridResponse.json(), historyResponse.json(), boundaryResponse.json()]);
+      if(!camsGridResponse.ok || !camsHistoryResponse.ok)throw new Error('โหลดข้อมูล CAMS ไม่สำเร็จ');
+      const [camsGrid,camsDataset]=await Promise.all([camsGridResponse.json(),camsHistoryResponse.json()]);
+      const camsDays=new Map(camsDataset.days.map(d=>[d.date,d]));
+      datasets={maiac:dataset,cams:{...camsDataset,start_date:dataset.start_date,end_date:dataset.end_date,
+        days:dataset.days.map(d=>camsDays.get(d.date)||{date:d.date,status:'NotPublished',available_cells:0,mean_pm25:null,cells:[]})}};
       if (!window.L || !dataset.days?.length || !grid.features?.length) throw new Error("ข้อมูลแผนที่ไม่สมบูรณ์");
       history = dataset;
       gridData=grid;
@@ -204,13 +267,14 @@
         onEachFeature(feature, layer) {
           layerById.set(feature.properties.grid_id, layer);
           layer.on('click',event=>{
-            if($('display-mode').value!=='idw' || !currentSampler)return;
+            if(selectedSource!=='maiac' || $('display-mode').value!=='idw' || !currentSampler)return;
             const [x,y]=utmProject.forward([event.latlng.lng,event.latlng.lat]);
             const estimate=currentSampler(x,y);
             L.popup().setLatLng(event.latlng).setContent(`<div class="popup-label">IDW ณ ตำแหน่งที่เลือก</div><div class="popup-value">${estimate.value.toFixed(2)} <small>µg/m³</small></div>`).openOn(map);
           });
         }
       }).addTo(map);
+      camsLayer=L.geoJSON(camsGrid,{style:{color:'#718b81',weight:.8,fillOpacity:.25}});
       // Dedicated pane keeps the study boundary above both the raster and grid.
       map.createPane('study-boundary');
       map.getPane('study-boundary').style.zIndex=450;
@@ -219,11 +283,10 @@
       L.geoJSON(boundary,{style:{...boundaryStyle,color:'#ffffff',weight:4.5,opacity:.85},interactive:false,pane:'study-boundary'}).addTo(map);
       L.geoJSON(boundary,{style:{...boundaryStyle,color:'#285447',weight:2,opacity:1},interactive:false,pane:'study-boundary'}).addTo(map);
       map.fitBounds(gridLayer.getBounds(), {padding: [22, 22]});
-      buildChart();
       const queryDate = new URLSearchParams(location.search).get("date");
       $("display-mode").value = new URLSearchParams(location.search).get("view") === "source" ? "source" : "idw";
-      const queryIndex = dataset.days.findIndex(day => day.date === queryDate);
-      selectIndex(queryIndex >= 0 ? queryIndex : dataset.days.length - 1);
+      selectSource(new URLSearchParams(location.search).get('source')==='cams'?'cams':'maiac',queryDate);
+      $('data-source').addEventListener('change',()=>selectSource($('data-source').value,dateInput.value));
       dateInput.addEventListener("change", () => {
         const index = dataset.days.findIndex(day => day.date === dateInput.value);
         if (index >= 0) selectIndex(index);
@@ -232,9 +295,7 @@
       $("display-mode").addEventListener("change", render);
       $("prev-day").addEventListener("click", () => selectIndex(selectedIndex - 1));
       $("next-day").addEventListener("click", () => selectIndex(selectedIndex + 1));
-      const latestIndex = dataset.days.findLastIndex(day => day.status === "Available");
-      $("latest-with-data").disabled = latestIndex < 0;
-      $("latest-with-data").addEventListener("click", () => selectIndex(latestIndex));
+      $("latest-with-data").addEventListener("click", () => selectIndex(history.days.findLastIndex(day=>day.status==='Available')));
     } catch (error) {
       $("map-title").textContent = "แผนที่ยังไม่พร้อม";
       status.lastElementChild.textContent = error.message;

@@ -9,3 +9,6 @@ pyproj>=3.6,<4
 pyhdf>=0.11,<1
 tzdata>=2024.1
 cryptography>=41,<48
+cdsapi>=0.7.7,<0.8
+ecmwf-datastores-client>=0.6,<0.7
+netCDF4>=1.7,<2

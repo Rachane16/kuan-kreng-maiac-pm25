@@ -6,6 +6,9 @@
 @media(max-width:850px){.below-grid{grid-template-columns:minmax(0,1fr)}.history-card,.detail-card{min-width:0}.section-head{flex-wrap:wrap}}
 .detail-row strong{min-width:0;overflow-wrap:anywhere}
 .boundary-key{display:flex;align-items:center;gap:8px;font-size:13px;color:#536b63;margin-top:10px}.boundary-key i{width:27px;border-top:2px dashed #285447}
+.detail-row[hidden],.cams-method-note[hidden]{display:none}.cams-method-note{padding:0 27px 24px;margin:0;color:#60777d;font-size:14px;line-height:1.9}.map-toolbar select:disabled{opacity:1;color:#657a7c;background:#edf3f1;cursor:default}
+.method-steps[hidden]{display:none}
+@media(min-width:1121px){.map-toolbar{grid-template-columns:minmax(100px,.65fr) minmax(0,1.35fr) minmax(0,1fr)}}
 
 /* Larger type and the expanded map workspace. */
 body{font-size:16px;line-height:1.65}

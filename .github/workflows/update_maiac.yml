@@ -1,4 +1,4 @@
-name: Update MAIAC dashboard
+name: Update MAIAC and CAMS dashboard
 
 on:
   schedule:
@@ -46,11 +46,24 @@ jobs:
           --boundary data/boundaries/kkpsf_boundary.geojson
           --grid data/boundaries/kkpsf_grid_1km.gpkg
           --model .private/Extra_Trees_model.pkl
+      - name: Refresh rolling CAMS data
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          CAMS_ADS_TOKEN: ${{ secrets.CAMS_ADS_TOKEN }}
+        run: |
+          if [ -n "$CAMS_ADS_TOKEN" ]; then
+            python -m cams.refresh \
+              --boundary data/boundaries/kkpsf_boundary.geojson \
+              --model .private/Extra_Trees_model.pkl
+          else
+            echo 'CAMS secret is not configured; retaining the published CAMS history.'
+          fi
       - name: Save verified site data
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/data/history.json docs/data/grid.geojson docs/data/boundary.geojson
+          git add docs/data/
           if ! git diff --cached --quiet; then
             git commit -m 'Update rolling MAIAC dashboard data'
             git push
