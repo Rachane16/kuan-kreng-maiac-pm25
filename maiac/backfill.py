@@ -26,7 +26,7 @@ def _session() -> requests.Session:
 
 
 def backfill(start: date, end: date, boundary: Path, grid: Path, model: Path,
-             raw_dir: Path, output_dir: Path, token: str) -> Path:
+             raw_dir: Path, output_dir: Path, token: str, force: bool = False) -> Path:
     if end < start:
         raise ValueError("End date is before start date")
     if not token:
@@ -45,7 +45,7 @@ def backfill(start: date, end: date, boundary: Path, grid: Path, model: Path,
         key = current.isoformat()
         metadata_path = output_dir / f"maiac_pm25_{key}.json"
         csv_path = output_dir / f"maiac_pm25_{key}.csv"
-        if metadata_path.exists() and csv_path.exists():
+        if not force and metadata_path.exists() and csv_path.exists():
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             days[key] = {"status": metadata["status"], "available_cells": metadata["available_cells"]}
             print(f"{key}: cached, {metadata['available_cells']} cells", flush=True)
@@ -76,9 +76,10 @@ def main() -> None:
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--raw", type=Path, default=Path("data/raw/maiac"))
     parser.add_argument("--output", type=Path, default=Path("data/outputs"))
+    parser.add_argument("--force", action="store_true", help="Recheck dates even when local outputs exist")
     args = parser.parse_args()
     path = backfill(args.start, args.end, args.boundary, args.grid, args.model,
-                    args.raw, args.output, os.getenv("NASA_EARTHDATA_TOKEN", ""))
+                    args.raw, args.output, os.getenv("NASA_EARTHDATA_TOKEN", ""), args.force)
     print(f"Manifest: {path}")
 
 

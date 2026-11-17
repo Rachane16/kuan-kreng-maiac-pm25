@@ -9,7 +9,7 @@
 - MODIS tile สำหรับพื้นที่: `h27v08`
 - โมเดลต้นฉบับที่ตรวจสอบแล้ว: `D:\LAB - PM2.5\FINAL ML-AOD\Final BestModel\Extra Trees Model\ET-2 Model\Extra_Trees_model.pkl`; ฟีเจอร์ที่โมเดลคาดหวังคือ `AOD 0.47` เพียงคอลัมน์เดียว ทดสอบโหลดและ `predict()` ด้วย Python 3.12.5 / scikit-learn 1.4.2 แล้ว
 
-ไฟล์โมเดลและโทเคนจะไม่ถูกคัดลอกเข้า repository นี้
+ไฟล์โมเดลแบบอ่านได้และโทเคนจะไม่ถูกคัดลอกเข้า repository นี้ งานอัปเดตอัตโนมัติใช้โมเดลที่เข้ารหัสและกุญแจถอดรหัสใน GitHub Actions Secret
 
 ## ติดตั้ง
 
@@ -55,7 +55,7 @@ python -m maiac.process --hdf 'C:\path\to\MCD19A2N.A2026319.h27v08.061.hdf' --bo
 
 ## เว็บไซต์ย้อนหลัง 3 เดือน
 
-เว็บไซต์ GitHub Pages ใช้ `docs/` จาก branch `main` และแสดงเฉพาะ GeoJSON ที่ตัดตามขอบเขตพรุควนเคร็ง ไฟล์ HDF ต้นฉบับไม่เผยแพร่ ช่วงแรกคือ 16 ส.ค.–15 พ.ย. 2026 (92 วัน) วันที่ไม่มี AOD ผ่าน QA แสดง `NoData` และไม่มีตัวเลข PM₂.₅ เมื่อข้อมูล NASA ของวันยังไม่มี แสดง `NotPublished`
+เว็บไซต์ GitHub Pages เผยแพร่ไฟล์ใน `docs/` และแสดงเฉพาะ GeoJSON ที่ตัดตามขอบเขตพรุควนเคร็ง ไฟล์ HDF ต้นฉบับไม่เผยแพร่ ช่วงแรกคือ 16 ส.ค.–15 พ.ย. 2026 (92 วัน) วันที่ไม่มี AOD ผ่าน QA แสดง `NoData` และไม่มีตัวเลข PM₂.₅ เมื่อข้อมูล NASA ของวันยังไม่มี แสดง `NotPublished`
 
 ```powershell
 python -m maiac.backfill --start 2026-08-16 --end 2026-11-15 --boundary '.\data\boundaries\kkpsf_boundary.geojson' --grid '.\data\boundaries\kkpsf_grid_1km.gpkg' --model 'D:\LAB - PM2.5\FINAL ML-AOD\Final BestModel\Extra Trees Model\ET-2 Model\Extra_Trees_model.pkl'
@@ -63,7 +63,13 @@ python -m maiac.export_site --start 2026-08-16 --end 2026-11-15 --boundary '.\da
 python -m http.server 8765 --directory docs
 ```
 
-`backfill` ค้นหาผ่าน NASA CMR เฉพาะ tile `h27v08` และใช้ NRT เป็นแหล่งสำรองสำหรับวันล่าสุด เมื่อรันซ้ำจะข้ามวันที่ประมวลผลแล้ว เว็บไซต์เป็นไฟล์สถิติจึงแสดงข้อมูลตามเวลาที่ส่งออกครั้งล่าสุด; การอัปเดตข้อมูลใหม่ต้องรันคำสั่งและเผยแพร่ไฟล์ `docs/data/history.json` อีกครั้ง ห้ามใส่ Earthdata token หรือไฟล์โมเดลไว้ใน repository
+`backfill` ค้นหาผ่าน NASA CMR เฉพาะ tile `h27v08` และใช้ NRT เป็นแหล่งสำรองสำหรับวันล่าสุด เมื่อรันซ้ำจะข้ามวันที่ประมวลผลแล้ว เว็บไซต์เป็นไฟล์สถิติจึงแสดงข้อมูลตามเวลาที่ส่งออกครั้งล่าสุด
+
+### อัปเดตรายวันผ่าน GitHub Actions
+
+Workflow `.github/workflows/update_maiac.yml` ตั้งเวลา 20:23 น. ประเทศไทยทุกวัน และสั่งรันเองได้ด้วย `workflow_dispatch` โดยใช้ `maiac.refresh_site` คงช่วง 92 วันล่าสุด ตรวจเฉพาะวันที่เพิ่งเพิ่ม วันที่ NASA ยังไม่เผยแพร่ และ 3 วันล่าสุดเพื่อเปลี่ยนจาก NRT เป็นไฟล์มาตรฐานเมื่อมีไฟล์ใหม่ ระบบจะเก็บ `NoData` และ `NotPublished` ตามจริง ถ้าดาวน์โหลดหรือประมวลผลผิดพลาด Workflow จะหยุดก่อนเผยแพร่ ทำให้เว็บเดิมยังคงใช้ได้
+
+ก่อนเปิดใช้งาน ต้องเพิ่ม repository secrets สองค่าใน GitHub: `NASA_EARTHDATA_TOKEN` สำหรับ NASA และ `MODEL_DECRYPT_KEY_B64` สำหรับถอดรหัสไฟล์ `models/Extra_Trees_model.pkl.aesgcm` ที่สร้างจากโมเดลต้นฉบับ ห้ามใส่ค่า secret ใน YAML, HTML, JavaScript, JSON หรือ Git commit จากนั้นตั้ง Pages Source เป็น **GitHub Actions** และรัน Workflow ด้วยมือหนึ่งครั้งเพื่อทดสอบ ก่อนปล่อยให้ตารางเวลาทำงาน หากไม่มี secrets Workflow จะไม่สามารถคำนวณข้อมูลใหม่ได้
 
 ## วิธีประมวลผล
 

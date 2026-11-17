@@ -32,6 +32,11 @@ def export_site(start: date, end: date, boundary_path: Path, grid_path: Path,
 
     manifest_path = output_dir / "backfill_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {"days": {}}
+    history_file = site_data_dir / "history.json"
+    previous = json.loads(history_file.read_text(encoding="utf-8")) if history_file.exists() else {}
+    if previous and previous.get("grid_count") != len(features):
+        raise ValueError("Existing site history uses a different grid")
+    previous_days = {item["date"]: item for item in previous.get("days", [])}
     days = []
     current = start
     while current <= end:
@@ -40,7 +45,10 @@ def export_site(start: date, end: date, boundary_path: Path, grid_path: Path,
         csv_path = output_dir / f"maiac_pm25_{key}.csv"
         record = {"date": key, "status": "NotChecked", "available_cells": 0,
                   "mean_pm25": None, "cells": []}
-        if metadata_path.exists() and csv_path.exists():
+        checked = manifest.get("days", {}).get(key)
+        if checked and checked["status"] == "NotPublished":
+            record["status"] = "NotPublished"
+        elif metadata_path.exists() and csv_path.exists():
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             frame = pd.read_csv(csv_path)
             valid = frame.loc[frame.aod_value.notna() & frame.predicted_pm25.notna()]
@@ -50,13 +58,14 @@ def export_site(start: date, end: date, boundary_path: Path, grid_path: Path,
             record["cells"] = [[row.grid_id, round(float(row.aod_value), 4),
                                 round(float(row.predicted_pm25), 2), row.data_time_utc,
                                 int(row.valid_overpasses)] for row in valid.itertuples()]
-        elif key in manifest.get("days", {}):
-            record["status"] = manifest["days"][key]["status"]
+        elif key in previous_days:
+            record = previous_days[key]
+        elif checked:
+            record["status"] = checked["status"]
         days.append(record)
         current += timedelta(days=1)
     if require_complete and any(item["status"] == "NotChecked" for item in days):
         raise ValueError("Backfill is incomplete; refusing to publish unchecked dates")
-    history_file = site_data_dir / "history.json"
     history_file.write_text(json.dumps({
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "start_date": start.isoformat(), "end_date": end.isoformat(),

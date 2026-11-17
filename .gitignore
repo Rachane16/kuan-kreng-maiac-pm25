@@ -8,3 +8,4 @@ data/outputs/
 .env
 .cdsapirc
 ขอบเขตพรุควนเคร็ง/
+.private/

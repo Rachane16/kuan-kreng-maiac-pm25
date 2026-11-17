@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import unittest
+import base64
+import json
+import os
 from tempfile import TemporaryDirectory
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -15,6 +18,9 @@ import pandas as pd
 
 from maiac.fetch import daily_url, parse_listing
 from maiac.archive import discover_range
+from maiac.crypto_model import decrypt, encrypt
+from maiac.export_site import export_site
+from maiac.refresh_site import refresh
 from maiac.grid import create_grid
 from maiac.process import process_files, read_hdf, sample_file
 from maiac.qc import daily_aod, quality_mask
@@ -142,6 +148,60 @@ class SpatialTests(unittest.TestCase):
             output = gpd.read_file(geojson_path).to_crs("EPSG:32647")
             boundary = gpd.read_file(BOUNDARY).to_crs("EPSG:32647").geometry.union_all()
             self.assertLess(output.geometry.union_all().symmetric_difference(boundary).area, 1)
+
+
+class DailyRefreshTests(unittest.TestCase):
+    def test_export_preserves_existing_days_when_only_new_day_is_processed(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            site_data = root / "site"
+            site_data.mkdir()
+            old = {"date": "2026-11-14", "status": "Available", "available_cells": 1,
+                   "mean_pm25": 5.2, "cells": [["one", 0.1, 5.2, None, 1]]}
+            (site_data / "history.json").write_text(json.dumps({"grid_count": 1052, "days": [old]}))
+            grid = ROOT / "data" / "boundaries" / "kkpsf_grid_1km.gpkg"
+            export_site(date(2026, 11, 14), date(2026, 11, 14), BOUNDARY, grid,
+                        root / "outputs", site_data, require_complete=True)
+            result = json.loads((site_data / "history.json").read_text(encoding="utf-8"))
+            self.assertEqual(result["days"], [old])
+            outputs = root / "outputs"
+            outputs.mkdir()
+            (outputs / "backfill_manifest.json").write_text(json.dumps({
+                "days": {"2026-11-14": {"status": "NotPublished", "available_cells": 0}}
+            }), encoding="utf-8")
+            export_site(date(2026, 11, 14), date(2026, 11, 14), BOUNDARY, grid,
+                        outputs, site_data, require_complete=True)
+            result = json.loads((site_data / "history.json").read_text(encoding="utf-8"))
+            self.assertEqual(result["days"][0]["status"], "NotPublished")
+
+    def test_refresh_checks_new_unpublished_and_recent_days_only(self) -> None:
+        with TemporaryDirectory() as temporary:
+            site_data = Path(temporary) / "site"
+            site_data.mkdir()
+            days = [{"date": f"2026-11-{n:02d}", "status": "NotPublished" if n == 11 else "NoData"}
+                    for n in range(10, 15)]
+            (site_data / "history.json").write_text(json.dumps({"days": days}), encoding="utf-8")
+            with patch("maiac.refresh_site.backfill") as backfill_mock, \
+                 patch("maiac.refresh_site.export_site", return_value=(Path("grid"), Path("history"))):
+                refresh(date(2026, 11, 15), 6, BOUNDARY, Path("grid"), Path("model"),
+                        site_data, Path("raw"), Path("output"), "fake-token")
+            self.assertEqual([call.args[0] for call in backfill_mock.call_args_list],
+                             [date(2026, 11, 11), date(2026, 11, 13),
+                              date(2026, 11, 14), date(2026, 11, 15)])
+
+    def test_encrypted_model_round_trip_and_authentication(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, encrypted, recovered = (root / name for name in ("source", "encrypted", "recovered"))
+            source.write_bytes(b"test model bytes")
+            key = base64.b64encode(os.urandom(32)).decode("ascii")
+            with patch.dict(os.environ, {"MODEL_DECRYPT_KEY_B64": key}):
+                encrypt(source, encrypted)
+                decrypt(encrypted, recovered)
+                self.assertEqual(recovered.read_bytes(), source.read_bytes())
+                encrypted.write_bytes(encrypted.read_bytes()[:-1] + b"0")
+                with self.assertRaises(Exception):
+                    decrypt(encrypted, recovered)
 
 
 if __name__ == "__main__":
