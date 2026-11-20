@@ -121,14 +121,3 @@ CAMS เปิดที่ชั่วโมงพยากรณ์ที่ใ
 ผลสมการที่ติดลบเป็น NoData ไม่แทนด้วยศูนย์และไม่นับรวมค่าเฉลี่ย ใช้สี pastel เดิมทั้งสามขนาด ช่วงแบ่ง PM₁ คือ **12 / 20 / 30 / 60** และ PM₀.₁ คือ **2.25 / 3.75 / 5.63 / 11.25 µg/m³** ขอบเขตตัวเลขต่อเนื่อง (เช่น >12–20) จึงไม่มีช่องว่างระหว่างช่วง ตัวเลือก PM₁ / PM₀.₁ แสดงเฉพาะช่วงตัวเลข ไม่มีคำตัดสินผลต่อสุขภาพ และมีคำอธิบายรหัสสีเบื้องต้นตามข้อความของผู้จัดทำ สัดส่วน 80% / 15% ใช้กำหนดช่วงสีเท่านั้น ไม่เปลี่ยนสัมประสิทธิ์ 0.14 ในสมการ PM₀.₁
 
 ทดสอบ: `python -m unittest discover -s tests` และ `node --test tests/test_idw.cjs tests/test_data.cjs` ตรวจเวลาไทย/ใกล้ปัจจุบัน ช่วงสี สมการ ค่าเฉลี่ยตามพื้นที่ การเลือกแหล่งข้อมูล ช่วงพยากรณ์จริงครบ 121 ชั่วโมง และ IDW
-
-
-## VIIRS NOAA Deep Blue
-
-`viirs/` discovers only NOAA-20 and NOAA-21 L2 Version 2.1, querying CMR with the Kuan Kreng bounding box and at most92 calendar days. Standard LAADS granules replace ASIPS NRT for the same acquisition; SNPP is excluded. Only intersecting swath files are downloaded (not global products). Native pixel centres must lie in the exact study polygon. Land AOD550 best-estimate and QA2/3 samples are aggregated on a boundary-clipped6km UTM reporting grid and Thai calendar day, then passed directly to the original Extra Trees input column `AOD 0.47`, as explicitly approved by the project owner. Metadata records the actual550nm wavelength; no wavelength conversion or model retraining occurs. The reporting grid is not the native swath footprint and does not imply1km resolution.
-
-Outputs `docs/data/viirs_history.json` and `viirs_grid.geojson` are mirrored by the central monitoring platform. Missing values stay NoData; daily means represent available overpasses and reporting-cell support, not a24-hour mean. Observation times/platforms and input granules remain in the snapshot. Provider failures preserve verified previous records and their original check times.
-
-`.github/workflows/viirs_noaa.yml` refreshes every3hours at UTC minute43 using the existing `NASA_EARTHDATA_TOKEN` and `MODEL_DECRYPT_KEY_B64` Actions secrets. Backfill can be dispatched with `max_days=92`; scheduled runs process up to12 changed days. Raw swaths and the decrypted model are not committed.
-
-Validation: `python -m unittest discover -s tests -p test_viirs.py -v`.
