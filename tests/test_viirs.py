@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -14,6 +15,7 @@ from shapely.geometry import box
 from viirs.fetch import COLLECTIONS, discover, identity
 from viirs.process import daily_record, grid_id, quality_mask, reporting_grid, samples
 from viirs.refresh import signature
+from viirs.refresh import refresh
 
 
 class Model:
@@ -103,6 +105,42 @@ class ViirsTests(unittest.TestCase):
         old = [{'id': 'same-overpass', 'url': 'nrt', 'revision': '1'}]
         new = [{'id': 'same-overpass', 'url': 'standard', 'revision': '1'}]
         self.assertNotEqual(signature(old), signature(new))
+
+    def test_download_failure_preserves_verified_data_and_original_update_time(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            boundary = root/'boundary.geojson'
+            gpd.GeoDataFrame({'geometry': [box(100, 8, 100.1, 8.1)]}, crs=4326).to_file(boundary, driver='GeoJSON')
+            from viirs.process import THAI
+            day = datetime.now(THAI).date().isoformat()
+            item = {'id': 'observed', 'url': 'prior', 'satellite': 'NOAA20', 'revision': '1', 'time_start': day+'T06:00:00Z'}
+            row = {'date': day, 'status': 'Available', 'available_cells': 1, 'mean_pm25': 20,
+                   'cells': [['known', .2, 20, 1]], 'checked_at_utc': day+'T07:00:00Z', 'input_granules': [item]}
+            (root/'viirs_history.json').write_text(json.dumps({'days': [row]}))
+            changed = {**item, 'url': 'reprocessed', 'revision': '2'}
+            with patch.dict(os.environ, {'NASA_EARTHDATA_TOKEN': 'test-only'}), patch('viirs.refresh.joblib.load', return_value=Model()), patch('viirs.refresh.discover', return_value=([changed], [])), patch('viirs.refresh.download', side_effect=RuntimeError('provider unavailable')):
+                Model.feature_names_in_ = ['AOD 0.47']
+                result = refresh(boundary, root/'model.pkl', root, days=1, max_days=1)
+            self.assertEqual(result['days'][0], row)
+            self.assertEqual(result['generated_at_utc'], row['checked_at_utc'])
+            self.assertEqual(result['state'], 'partial')
+
+    def test_incomplete_collection_inventory_cannot_remove_prior_platform(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            boundary = root/'boundary.geojson'
+            gpd.GeoDataFrame({'geometry': [box(100, 8, 100.1, 8.1)]}, crs=4326).to_file(boundary, driver='GeoJSON')
+            from viirs.process import THAI
+            day = datetime.now(THAI).date().isoformat()
+            item = {'id': 'noaa21', 'url': 'prior', 'satellite': 'NOAA21', 'time_start': day+'T06:00:00Z'}
+            row = {'date': day, 'status': 'Available', 'available_cells': 1, 'mean_pm25': 20,
+                   'cells': [['known', .2, 20, 1]], 'checked_at_utc': day+'T07:00:00Z', 'input_granules': [item]}
+            (root/'viirs_history.json').write_text(json.dumps({'days': [row]}))
+            with patch.dict(os.environ, {'NASA_EARTHDATA_TOKEN': 'test-only'}), patch('viirs.refresh.joblib.load', return_value=Model()), patch('viirs.refresh.discover', return_value=([], ['NOAA21/nrt'])), patch('viirs.refresh.download', side_effect=AssertionError('No complete inventory to download')):
+                Model.feature_names_in_ = ['AOD 0.47']
+                result = refresh(boundary, root/'model.pkl', root, days=1, max_days=1)
+            self.assertEqual(result['days'][0], row)
+            self.assertEqual(result['state'], 'partial')
 
 
 if __name__ == '__main__':
